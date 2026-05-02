@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>基金管理仪表板</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --color-bg-primary: #ffffff;
+      --color-bg-secondary: #f5f5f0;
+      --color-bg-tertiary: #efefea;
+      --color-bg-info: #e6f1fb;
+      --color-bg-success: #eaf3de;
+      --color-bg-warning: #faeeda;
+      --color-bg-danger: #fcebeb;
+      --color-text-primary: #1a1a18;
+      --color-text-secondary: #6b6b66;
+      --color-text-info: #185fa5;
+      --color-text-success: #3b6d11;
+      --color-text-warning: #854f0b;
+      --color-text-danger: #a32d2d;
+      --color-border: rgba(0,0,0,0.12);
+      --color-border-md: rgba(0,0,0,0.22);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --font: -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg-primary: #1c1c1a;
+        --color-bg-secondary: #252522;
+        --color-bg-tertiary: #2e2e2b;
+        --color-bg-info: #0c2540;
+        --color-bg-success: #152208;
+        --color-bg-warning: #251504;
+        --color-bg-danger: #200c0c;
+        --color-text-primary: #f0efe8;
+        --color-text-secondary: #9a9992;
+        --color-text-info: #85b7eb;
+        --color-text-success: #97c459;
+        --color-text-warning: #ef9f27;
+        --color-text-danger: #f09595;
+        --color-border: rgba(255,255,255,0.10);
+        --color-border-md: rgba(255,255,255,0.20);
+      }
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; }
+
+    /* Header */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .header-left h1 { font-size: 22px; font-weight: 500; }
+    .header-left p { font-size: 12px; color: var(--color-text-secondary); margin-top: 3px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 0.5px solid var(--color-border); margin-bottom: 1.5rem; }
+    .tab { padding: 8px 18px; font-size: 13px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--color-text-secondary); font-family: var(--font); transition: all .15s; }
+    .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
+    .tab:hover:not(.active) { color: var(--color-text-primary); }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Metrics */
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+    .metric { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 14px 16px; }
+    .metric-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+    .metric-value { font-size: 22px; font-weight: 500; }
+    .metric-sub { font-size: 12px; margin-top: 4px; color: var(--color-text-secondary); }
+
+    /* Colors */
+    .up   { color: #e24b4a; }
+    .down { color: #1d9e75; }
+    .neutral { color: var(--color-text-secondary); }
+
+    /* Cards */
+    .card { background: var(--color-bg-primary); border: 0.5px solid var(--color-border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+
+    /* Two columns */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* Section title */
+    .section-title { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 10px; }
+
+    /* Alloc bars */
+    .alloc-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .alloc-name { font-size: 13px; width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alloc-flex { flex: 1; }
+    .alloc-bar-wrap { height: 6px; background: var(--color-bg-tertiary); border-radius: 3px; overflow: hidden; }
+    .alloc-bar { height: 100%; border-radius: 3px; transition: width .4s ease; }
+    .alloc-pct { font-size: 13px; font-weight: 500; width: 44px; text-align: right; }
+
+    /* Market rows */
+    .market-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--color-border); font-size: 13px; }
+    .market-row:last-child { border-bottom: none; }
+
+    /* Fund table */
+    .fund-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .fund-table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); padding: 0 8px 10px 8px; border-bottom: 0.5px solid var(--color-border); }
+    .fund-table td { padding: 12px 8px; border-bottom: 0.5px solid var(--color-border); vertical-align: middle; }
+    .fund-table tr:last-child td { border-bottom: none; }
+    .fund-name { font-weight: 500; }
+    .fund-code { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: var(--radius-md); font-size: 11px; font-weight: 500; }
+    .badge-buy  { background: var(--color-bg-success); color: var(--color-text-success); }
+    .badge-hold { background: var(--color-bg-info);    color: var(--color-text-info); }
+    .badge-sell { background: var(--color-bg-danger);  color: var(--color-text-danger); }
+    .badge-warn { background: var(--color-bg-warning); color: var(--color-text-warning); }
+
+    /* Buttons */
+    .btn { padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; cursor: pointer; border: 0.5px solid var(--color-border-md); background: var(--color-bg-primary); color: var(--color-text-primary); font-family: var(--font); transition: all .15s; }
+    .btn:hover { background: var(--color-bg-secondary); }
+    .btn-primary { background: var(--color-text-primary); color: var(--color-bg-primary); border-color: transparent; }
+    .btn-primary:hover { opacity: .82; }
+    .btn-block { width: 100%; margin-top: 8px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 1rem; }
+
+    /* Forms */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    @media (max-width: 500px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-item { display: flex; flex-direction: column; gap: 4px; }
+    .form-item label { font-size: 12px; color: var(--color-text-secondary); }
+    .form-item input, .form-item select { padding: 8px 10px; font-size: 13px; border: 0.5px solid var(--color-border-md); border-radius: var(--radius-md); background: var(--color-bg-primary); color: var(--color-text-primary); font-family: var(--font); outline: none; }
+    .form-item input:focus, .form-item select:focus { border-color: #378add; box-shadow: 0 0 0 2px rgba(55,138,221,.15); }
+    .form-section { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1rem; }
+    .inline-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .inline-row label { font-size: 13px; color: var(--color-text-secondary); width: 80px; flex-shrink: 0; }
+    .inline-row input, .inline-row select { flex: 1; padding: 7px 10px; font-size: 13px; border: 0.5px solid var(--color-border-md); border-radius: var(--radius-md); background: var(--color-bg-primary); color: var(--color-text-primary); font-family: var(--font); outline: none; max-width: 200px; }
+    .inline-row span { font-size: 13px; color: var(--color-text-secondary); }
+
+    /* Rebalance */
+    .rebal-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .rebal-name { font-size: 13px; width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rebal-flex { flex: 1; }
+    .rebal-action { font-size: 12px; font-weight: 500; width: 90px; text-align: right; flex-shrink: 0; }
+    .diff-bar { height: 6px; border-radius: 3px; position: relative; background: var(--color-bg-tertiary); overflow: hidden; }
+    .diff-fill { position: absolute; height: 100%; border-radius: 3px; }
+
+    /* Advice */
+    .advice-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+    .advice-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+    .advice-date { font-size: 12px; color: var(--color-text-secondary); }
+    .strategy-tag { font-size: 11px; padding: 3px 12px; border-radius: 20px; background: var(--color-bg-info); color: var(--color-text-info); white-space: nowrap; }
+    .advice-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--color-border); }
+    .advice-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .advice-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+    .advice-icon.buy    { background: var(--color-bg-success); color: var(--color-text-success); }
+    .advice-icon.hold   { background: var(--color-bg-info);    color: var(--color-text-info); }
+    .advice-icon.reduce { background: var(--color-bg-warning); color: var(--color-text-warning); }
+    .advice-icon.sell   { background: var(--color-bg-danger);  color: var(--color-text-danger); }
+    .advice-body-title { font-size: 13px; font-weight: 500; }
+    .advice-body-desc  { font-size: 12px; color: var(--color-text-secondary); margin-top: 3px; line-height: 1.6; }
+
+    /* Strategy cards */
+    .strategy-card { background: var(--color-bg-primary); border: 0.5px solid var(--color-border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; cursor: pointer; transition: border-color .15s; }
+    .strategy-card.active { border: 1.5px solid #378add; }
+    .strategy-card:hover:not(.active) { border-color: var(--color-border-md); }
+    .strategy-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .strategy-name { font-size: 14px; font-weight: 500; }
+    .strategy-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 8px; }
+    .rules { display: flex; flex-wrap: wrap; gap: 6px; }
+    .rule-chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+    .in-use-badge { font-size: 11px; padding: 2px 10px; border-radius: 20px; background: var(--color-bg-info); color: var(--color-text-info); }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--color-text-primary); color: var(--color-bg-primary); padding: 10px 20px; border-radius: var(--radius-md); font-size: 13px; opacity: 0; transition: all .3s; pointer-events: none; z-index: 100; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Toggle switch */
+    .toggle-wrap { display: flex; align-items: center; gap: 10px; }
+    .toggle-label { font-size: 13px; color: var(--color-text-secondary); }
+    .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track { position: absolute; inset: 0; background: var(--color-border-md); border-radius: 20px; cursor: pointer; transition: background .2s; }
+    .toggle input:checked + .toggle-track { background: #378add; }
+    .toggle-track::after { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform .2s; }
+    .toggle input:checked + .toggle-track::after { transform: translateX(16px); }
+
+    /* Checkpoint panel */
+    .cp-bar { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 1rem; }
+    .cp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
+    .cp-body { margin-top: 12px; border-top: 0.5px solid var(--color-border); padding-top: 12px; }
+    .cp-add-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 10px; }
+    .cp-add-row .form-item { min-width: 140px; flex: 1; }
+    .cp-list { display: flex; flex-direction: column; gap: 6px; }
+    .cp-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--color-bg-primary); border: 0.5px solid var(--color-border); border-radius: var(--radius-md); font-size: 13px; }
+    .cp-item.active-cp { border-color: #378add; }
+    .cp-dot { width: 8px; height: 8px; border-radius: 50%; background: #378add; flex-shrink: 0; }
+    .cp-dot.origin { background: #1D9E75; }
+    .cp-name { flex: 1; font-weight: 500; }
+    .cp-meta { font-size: 12px; color: var(--color-text-secondary); }
+    .cp-del { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-md); border: 0.5px solid var(--color-border); background: none; cursor: pointer; color: var(--color-text-secondary); font-family: var(--font); }
+    .cp-del:hover { background: var(--color-bg-danger); color: var(--color-text-danger); border-color: transparent; }
+
+    /* Baseline mode banner */
+    .mode-banner { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-md); font-size: 12px; margin-bottom: 1rem; }
+    .mode-banner.mode-origin { background: var(--color-bg-success); color: var(--color-text-success); border: 0.5px solid #97c459; }
+    .mode-banner.mode-stage  { background: var(--color-bg-info);    color: var(--color-text-info);    border: 0.5px solid #85b7eb; }
+    .mode-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    /* Stage timeline in fund table */
+    .stage-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .stage-chip { font-size: 10px; padding: 1px 7px; border-radius: 20px; }
+    .stage-chip.pos { background: var(--color-bg-success); color: var(--color-text-success); }
+    .stage-chip.neg { background: var(--color-bg-danger);  color: var(--color-text-danger); }
+    /* OCR dropzone */
+    #ocr-dropzone:hover, #ocr-dropzone.dz-over { background: var(--color-bg-secondary); border-color: #378add; }
+    .ocr-card { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; }
+    .ocr-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .ocr-card-name { font-size: 13px; font-weight: 500; }
+    .ocr-card-code { font-size: 11px; color: var(--color-text-secondary); }
+    .ocr-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ocr-field { display: flex; flex-direction: column; gap: 3px; }
+    .ocr-field label { font-size: 11px; color: var(--color-text-secondary); }
+    .ocr-field input, .ocr-field select { padding: 6px 8px; font-size: 13px; border: 0.5px solid var(--color-border-md); border-radius: var(--radius-md); background: var(--color-bg-primary); color: var(--color-text-primary); font-family: var(--font); outline: none; }
+    .ocr-field input:focus { border-color: #378add; }
+    .ocr-add-btn { margin-top: 10px; font-size: 12px; padding: 5px 14px; }
+    @keyframes pulse { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+    /* Edit modal inputs */
+    #edit-modal input, #edit-modal select {
+      width: 100%; padding: 8px 10px; font-size: 13px;
+      border: 0.5px solid var(--color-border-md); border-radius: var(--radius-md);
+      background: var(--color-bg-primary); color: var(--color-text-primary);
+      font-family: var(--font); outline: none; transition: border-color .15s;
+    }
+    #edit-modal input:focus { border-color: #378add; box-shadow: 0 0 0 2px rgba(55,138,221,.15); }
+    /* Fade-in animation for modal */
+    @keyframes modalIn { from { opacity:0; transform:scale(.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
+    #edit-modal { animation: modalIn .18s ease; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>基金管理仪表板</h1>
+      <p id="today-date"></p>
+    </div>
+    <button class="btn btn-primary" onclick="openAI()">获取今日AI建议</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('overview')">持仓总览</button>
+    <button class="tab"        onclick="switchTab('allocate')">比例管理</button>
+    <button class="tab"        onclick="switchTab('advice')">每日建议</button>
+    <button class="tab"        onclick="switchTab('strategy')">策略设置</button>
+  </div>
+
+  <!-- ① 持仓总览 -->
+  <div class="page active" id="page-overview">
+
+    <!-- 盈利基准面板 -->
+    <div class="cp-bar">
+      <div class="cp-header">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <span style="font-size:13px;font-weight:500;color:var(--color-text-primary);">盈利基准模式</span>
+          <span style="font-size:12px;color:var(--color-text-secondary);" id="cp-mode-hint">当前：以最近初始化节点为基准</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--color-text-secondary);">查看原始总收益</span>
+          <label class="toggle" title="开启后忽略所有节点，回到原始本金计算总收益">
+            <input type="checkbox" id="origin-toggle" onchange="onToggleOrigin(this.checked)" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+      <div class="cp-body" id="cp-body">
+        <div class="cp-add-row">
+          <div class="form-item" style="min-width:130px;flex:1;">
+            <label>节点名称</label>
+            <input id="cp-inp-label" type="text" placeholder="如 26年4月初始化" />
+          </div>
+          <div class="form-item" style="min-width:130px;flex:1;">
+            <label>初始化日期</label>
+            <input id="cp-inp-date" type="month" />
+          </div>
+          <div class="form-item" style="min-width:200px;flex:2;">
+            <label>各基金净值快照（逗号分隔，按持仓顺序）</label>
+            <input id="cp-inp-navs" type="text" placeholder="如 4.215, 2.087, 1.534, 3.212" />
+          </div>
+          <button class="btn btn-primary" style="height:36px;flex-shrink:0;align-self:flex-end;" onclick="addCheckpoint()">记录节点</button>
+        </div>
+        <div id="cp-list" class="cp-list"></div>
+      </div>
+    </div>
+
+    <!-- 模式标识条 -->
+    <div class="mode-banner mode-stage" id="mode-banner">
+      <span class="mode-dot"></span>
+      <span id="mode-banner-text">阶段收益模式 — 从最近初始化节点起算</span>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">总市值</div><div class="metric-value" id="m-total">¥0</div><div class="metric-sub" id="m-total-sub">—</div></div>
+      <div class="metric"><div class="metric-label">今日盈亏</div><div class="metric-value" id="m-pnl">¥0</div><div class="metric-sub" id="m-pnl-pct">—</div></div>
+      <div class="metric"><div class="metric-label">持仓基金数</div><div class="metric-value" id="m-count">0</div><div class="metric-sub neutral">支基金</div></div>
+      <div class="metric"><div class="metric-label">最大回撤(模拟)</div><div class="metric-value" id="m-dd" class="down">—</div><div class="metric-sub down">近30日</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card" style="margin-bottom:0;">
+        <div class="section-title">持仓比例</div>
+        <div id="alloc-bars"></div>
+      </div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="section-title">市场行情（模拟）</div>
+        <div class="market-row"><span style="color:var(--color-text-secondary)">沪深300</span><span id="idx-hs300" class="up">+1.23%</span></div>
+        <div class="market-row"><span style="color:var(--color-text-secondary)">中证500</span><span id="idx-zz500" class="up">+0.87%</span></div>
+        <div class="market-row"><span style="color:var(--color-text-secondary)">科创50</span><span id="idx-kc50"  class="down">-0.45%</span></div>
+        <div class="market-row"><span style="color:var(--color-text-secondary)">纳斯达克</span><span id="idx-nas"  class="up">+0.62%</span></div>
+        <div class="market-row"><span style="color:var(--color-text-secondary)">标普500</span><span id="idx-sp"   class="up">+0.38%</span></div>
+      </div>
+    </div>
+    <div style="height:1rem;"></div>
+
+    <div class="card">
+      <div class="section-title">基金持仓明细</div>
+      <div style="overflow-x:auto;">
+        <table class="fund-table">
+          <thead><tr>
+            <th>基金名称</th><th>净值</th><th>份额</th><th>市值</th><th>仓位/目标</th><th>建议</th><th></th>
+          </tr></thead>
+          <tbody id="fund-tbody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-block" onclick="switchTab('allocate')">+ 添加基金</button>
+    </div>
+  </div>
+
+  <!-- ② 比例管理 -->
+  <div class="page" id="page-allocate">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <span class="section-title" style="margin-bottom:0;">添加基金</span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn" id="tab-manual-btn" onclick="switchAddTab('manual')" style="font-size:12px;padding:5px 12px;">手动填写</button>
+          <button class="btn" id="tab-ocr-btn"    onclick="switchAddTab('ocr')"    style="font-size:12px;padding:5px 12px;background:var(--color-text-primary);color:var(--color-bg-primary);border-color:transparent;">截图识别</button>
+        </div>
+      </div>
+
+      <!-- 截图识别面板 -->
+      <div id="panel-ocr">
+        <input type="file" id="ocr-file-input" accept="image/png,image/jpeg,image/jpg,image/webp,image/heic,image/heif" style="display:none;" onchange="onOcrFileChosen(event)" />
+
+        <!-- 拖放/点击上传区 -->
+        <div id="ocr-dropzone"
+          onclick="document.getElementById('ocr-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('dz-over')"
+          ondragleave="this.classList.remove('dz-over')"
+          ondrop="onOcrDrop(event)"
+          style="border:1.5px dashed var(--color-border-md);border-radius:var(--radius-lg);padding:2rem 1rem;text-align:center;cursor:pointer;transition:background .15s;">
+          <div style="font-size:28px;margin-bottom:8px;opacity:.5;">🖼</div>
+          <div style="font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px;">点击选择截图文件</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);">支持 PNG / JPG / WebP / HEIC（iPhone截图）/ HEIF · 或直接拖入</div>
+        </div>
+
+        <!-- 预览 + 状态 -->
+        <div id="ocr-preview-wrap" style="display:none;margin-top:12px;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <img id="ocr-preview-img" style="width:90px;border-radius:var(--radius-md);border:0.5px solid var(--color-border);flex-shrink:0;object-fit:cover;" />
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:500;color:var(--color-text-primary);" id="ocr-filename"></div>
+              <div style="font-size:12px;color:var(--color-text-secondary);margin-top:3px;" id="ocr-fileinfo"></div>
+              <div style="margin-top:8px;display:flex;gap:8px;">
+                <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;" id="ocr-analyze-btn" onclick="runOcrAnalysis()">AI 识别持仓</button>
+                <button class="btn" style="font-size:12px;padding:5px 12px;" onclick="clearOcrFile()">重新选择</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 识别结果 -->
+        <div id="ocr-result-wrap" style="display:none;margin-top:14px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-primary);">识别结果</span>
+            <span style="font-size:11px;color:var(--color-text-secondary);">确认后点击添加</span>
+          </div>
+          <div id="ocr-cards"></div>
+          <button class="btn btn-primary btn-block" id="ocr-add-all-btn" onclick="addAllOcrFunds()" style="display:none;margin-top:8px;">全部添加到持仓</button>
+        </div>
+
+        <!-- 识别中 loading -->
+        <div id="ocr-loading" style="display:none;text-align:center;padding:1.5rem 0;">
+          <div style="font-size:13px;color:var(--color-text-secondary);">AI 正在识别截图中的基金信息…</div>
+          <div style="margin-top:8px;display:flex;justify-content:center;gap:5px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--color-text-secondary);animation:pulse 1.4s infinite .0s;display:inline-block;"></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--color-text-secondary);animation:pulse 1.4s infinite .2s;display:inline-block;"></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--color-text-secondary);animation:pulse 1.4s infinite .4s;display:inline-block;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 手动填写面板 -->
+      <div id="panel-manual" style="display:none;">
+        <div class="form-section">
+
+          <!-- 代码输入行：单独一行，带查询按钮和状态 -->
+          <div style="margin-bottom:12px;">
+            <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px;">基金代码</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input id="inp-code" type="text" placeholder="输入6位代码，自动回填信息" maxlength="6"
+                style="flex:1;padding:8px 10px;font-size:13px;border:0.5px solid var(--color-border-md);border-radius:var(--radius-md);background:var(--color-bg-primary);color:var(--color-text-primary);font-family:var(--font);outline:none;transition:border-color .15s;"
+                oninput="onCodeInput(this.value)"
+                onblur="if(this.value.length===6) fetchFundInfo(this.value)" />
+              <button class="btn" id="lookup-btn" onclick="fetchFundInfo(document.getElementById('inp-code').value)"
+                style="flex-shrink:0;padding:8px 14px;font-size:13px;white-space:nowrap;">
+                查询
+              </button>
+            </div>
+            <!-- 状态提示行 -->
+            <div id="lookup-status" style="margin-top:6px;font-size:12px;min-height:18px;display:flex;align-items:center;gap:6px;"></div>
+          </div>
+
+          <div class="form-grid">
+            <!-- 基金名称：自动回填，可手改 -->
+            <div class="form-item" style="grid-column:1/-1;">
+              <label>基金名称</label>
+              <div style="position:relative;">
+                <input id="inp-name" type="text" placeholder="查询代码后自动填入" />
+                <span id="inp-name-tag" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;padding:1px 7px;border-radius:20px;background:var(--color-bg-success);color:var(--color-text-success);">自动回填</span>
+              </div>
+            </div>
+
+            <!-- 净值：自动回填 -->
+            <div class="form-item" style="position:relative;">
+              <label>最新净值（上一交易日）</label>
+              <div style="position:relative;">
+                <input id="inp-nav" type="number" placeholder="查询后自动填入" step="0.001" min="0" />
+                <span id="inp-nav-tag" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;padding:1px 7px;border-radius:20px;background:var(--color-bg-success);color:var(--color-text-success);">自动回填</span>
+              </div>
+              <div id="inp-nav-hint" style="font-size:11px;color:var(--color-text-secondary);margin-top:3px;"></div>
+            </div>
+
+            <div class="form-item">
+              <label>买入时净值（原始本金基准）</label>
+              <input id="inp-origin-nav" type="number" placeholder="如 3.120" step="0.001" min="0" />
+            </div>
+            <div class="form-item">
+              <label>持有份额</label>
+              <input id="inp-shares" type="number" placeholder="如 5000" step="1" min="0" />
+            </div>
+            <div class="form-item">
+              <label>目标仓位 (%)</label>
+              <input id="inp-target" type="number" placeholder="如 30" min="0" max="100" />
+            </div>
+            <div class="form-item">
+              <label>基金类型</label>
+              <select id="inp-type">
+                <option value="A股公募">A股公募</option>
+                <option value="ETF指数">ETF指数</option>
+                <option value="QDII">QDII</option>
+                <option value="债券">债券基金</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block" onclick="addFund()">添加到持仓</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">再平衡建议</div>
+      <div id="rebal-list"></div>
+      <button class="btn btn-block" onclick="openAI('rebalance')">AI 精确再平衡方案</button>
+    </div>
+  </div>
+
+  <!-- ③ 每日建议 -->
+  <div class="page" id="page-advice">
+    <div class="card">
+      <div class="advice-header">
+        <div>
+          <div class="advice-title">今日智能投资建议</div>
+          <div class="advice-date" id="advice-date"></div>
+        </div>
+        <span class="strategy-tag" id="strategy-label">均衡策略</span>
+      </div>
+      <div id="advice-list"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="openAI('deep')">深度分析今日建议</button>
+      <button class="btn" onclick="openAI('market')">市场影响分析</button>
+      <button class="btn" onclick="openAI('risk')">风险评估</button>
+    </div>
+
+    <!-- AI 对话区 -->
+    <div class="card" id="ai-section" style="display:none; margin-top:1rem;">
+      <div class="section-title" style="margin-bottom:10px;">AI 助理</div>
+      <div id="ai-output" style="font-size:13px; line-height:1.8; color:var(--color-text-primary); white-space:pre-wrap; min-height:60px;"></div>
+      <div id="ai-loading" style="display:none; color:var(--color-text-secondary); font-size:13px; padding:8px 0;">正在分析中…</div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input id="ai-input" type="text" placeholder="继续提问…" style="flex:1; padding:8px 10px; font-size:13px; border:0.5px solid var(--color-border-md); border-radius:var(--radius-md); background:var(--color-bg-primary); color:var(--color-text-primary); font-family:inherit; outline:none;" onkeydown="if(event.key==='Enter') askAI()" />
+        <button class="btn btn-primary" onclick="askAI()">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 策略设置 -->
+  <div class="page" id="page-strategy">
+    <div class="section-title" style="margin-bottom:12px;">选择投资策略</div>
+    <div id="strategy-list"></div>
+
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="section-title" style="margin-bottom:12px;">自定义规则</div>
+      <div class="inline-row"><label>止盈线</label><input id="tp-val" type="number" placeholder="如 15" /><span>%</span></div>
+      <div class="inline-row"><label>止损线</label><input id="sl-val" type="number" placeholder="如 8"  /><span>%</span></div>
+      <div class="inline-row">
+        <label>定投周期</label>
+        <select id="dca-day">
+          <option>每周一</option><option>每周三</option><option>每周五</option>
+          <option>每月1日</option><option>每月15日</option>
+        </select>
+      </div>
+      <div class="inline-row"><label>每次定投</label><input id="dca-amt" type="number" placeholder="如 1000" /><span>元</span></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveStrategy()">保存策略</button>
+        <button class="btn" onclick="openAI('strategy')">AI 优化策略参数</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 编辑基金弹窗 -->
+<div id="edit-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:1rem;">
+  <div id="edit-modal" style="background:var(--color-bg-primary);border-radius:var(--radius-xl);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <!-- 弹窗头 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:0.5px solid var(--color-border);">
+      <div>
+        <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);">编辑基金</div>
+        <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px;" id="edit-modal-subtitle"></div>
+      </div>
+      <button onclick="closeEditModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--color-text-secondary);padding:4px;line-height:1;">✕</button>
+    </div>
+    <!-- 弹窗体 -->
+    <div style="padding:1.25rem;">
+      <!-- 代码行 + 查询 -->
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px;">基金代码</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="edit-code" type="text" maxlength="6" placeholder="6位代码"
+            style="flex:1;padding:8px 10px;font-size:13px;border:0.5px solid var(--color-border-md);border-radius:var(--radius-md);background:var(--color-bg-primary);color:var(--color-text-primary);font-family:var(--font);outline:none;"
+            onblur="if(this.value.length===6) fetchFundInfoEdit(this.value)" />
+          <button class="btn" id="edit-lookup-btn" onclick="fetchFundInfoEdit(document.getElementById('edit-code').value)"
+            style="flex-shrink:0;font-size:12px;padding:7px 12px;">查询最新净值</button>
+        </div>
+        <div id="edit-lookup-status" style="font-size:12px;min-height:18px;margin-top:5px;"></div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-item" style="grid-column:1/-1;">
+          <label>基金名称</label>
+          <input id="edit-name" type="text" placeholder="基金名称" />
+        </div>
+        <div class="form-item">
+          <label>当前净值</label>
+          <input id="edit-nav" type="number" step="0.001" min="0" placeholder="如 4.215" />
+          <div id="edit-nav-hint" style="font-size:11px;color:var(--color-text-secondary);margin-top:3px;"></div>
+        </div>
+        <div class="form-item">
+          <label>买入时净值（原始基准）</label>
+          <input id="edit-origin-nav" type="number" step="0.001" min="0" placeholder="如 3.120" />
+        </div>
+        <div class="form-item">
+          <label>持有份额</label>
+          <input id="edit-shares" type="number" step="1" min="0" placeholder="如 5000" />
+        </div>
+        <div class="form-item">
+          <label>目标仓位 (%)</label>
+          <input id="edit-target" type="number" min="0" max="100" placeholder="如 30" />
+        </div>
+        <div class="form-item" style="grid-column:1/-1;">
+          <label>基金类型</label>
+          <select id="edit-type">
+            <option value="A股公募">A股公募</option>
+            <option value="ETF指数">ETF指数</option>
+            <option value="QDII">QDII</option>
+            <option value="债券基金">债券基金</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="saveEditFund()">保存修改</button>
+        <button class="btn" style="flex:1;" onclick="closeEditModal()">取消</button>
+        <button class="btn" id="edit-refresh-btn" onclick="fetchFundInfoEdit(document.getElementById('edit-code').value,true)"
+          style="flex-shrink:0;font-size:12px;padding:8px 12px;" title="从天天基金拉取最新净值">↻ 刷新净值</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── 配置：替换成你自己的 Anthropic API Key ───────────────────────────────
+// 注意：生产环境请把 Key 放服务端，不要直接暴露在前端！
+const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
+const MODEL = 'claude-sonnet-4-20250514';
+// ──────────────────────────────────────────────────────────────────────────
+
+const COLORS = ['#378ADD','#1D9E75','#E24B4A','#BA7517','#7F77DD','#D4537E','#0F6E56'];
+
+// ── 状态（本地存储持久化）─────────────────────────────────────────────────
+function loadState() {
+  try { return JSON.parse(localStorage.getItem('fund_state')) || null; } catch { return null; }
+}
+function saveState() { localStorage.setItem('fund_state', JSON.stringify(state)); }
+
+let state = loadState() || {
+  activeStrategy: 0,
+  originMode: false,   // true = 回到原始本金；false = 阶段模式（用最近节点）
+  // checkpoints: 每次初始化节点
+  // { id, label, date, navs: [nav_per_fund_by_order] }
+  // 第一条永远是"原始买入"节点（originNavs），由用户在添加基金时自动写入
+  checkpoints: [],
+  funds: [
+    { code:'000300', name:'华泰柏瑞沪深300ETF', type:'ETF指数',  nav:4.215, shares:5000, target:35, originNav:3.120 },
+    { code:'110020', name:'易方达中证500',       type:'A股公募', nav:2.087, shares:8000, target:25, originNav:1.650 },
+    { code:'161725', name:'招商中证白酒',         type:'A股公募', nav:1.534, shares:6000, target:20, originNav:1.200 },
+    { code:'006479', name:'工银全球精选QDII',     type:'QDII',   nav:3.212, shares:3000, target:20, originNav:2.800 },
+  ],
+  strategies: [
+    { name:'均衡策略',  desc:'平衡风险与收益，定期再平衡，适合长期持有',         rules:['止盈15%','止损8%','季度再平衡','沪深300+中证500'] },
+    { name:'定投策略',  desc:'每周/月定期定额投入，摊薄成本，适合长期积累',       rules:['每周五定投','单次¥500','下跌加倍','不做择时'] },
+    { name:'趋势策略',  desc:'跟随市场趋势，上涨加仓下跌减仓，适合有经验的投资者', rules:['MA20上方持仓','MA20下方空仓','止损5%','月度调仓'] },
+  ]
+};
+
+// ── 工具函数 ────────────────────────────────────────────────────────────────
+const fmtMoney = n => '¥' + n.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtInt   = n => n.toLocaleString('zh-CN');
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function fundTotal() { return state.funds.reduce((s,f) => s + f.nav * f.shares, 0); }
+
+function fundAdvice(f, i) {
+  // 简单规则：仓位偏高→减仓，偏低→买入，正常→持有
+  const total = fundTotal();
+  const cur = total > 0 ? f.nav * f.shares / total * 100 : 0;
+  const diff = cur - f.target;
+  if (diff > 5)  return {label:'减仓', cls:'sell',   icon:'减'};
+  if (diff < -5) return {label:'买入', cls:'buy',    icon:'买'};
+  return           {label:'持有', cls:'hold',   icon:'持'};
+}
+
+// ── 基准计算核心 ────────────────────────────────────────────────────────────
+// 获取当前有效基准净值（每支基金对应一个基准nav）
+function getBaseNavs() {
+  if (state.originMode) {
+    // 开关打开：用每支基金的 originNav（原始买入净值）
+    return state.funds.map(f => f.originNav || f.nav);
+  }
+  // 阶段模式：用最近一个节点的快照，没有节点则也用originNav
+  if (!state.checkpoints.length) return state.funds.map(f => f.originNav || f.nav);
+  // 取最新节点（按日期排序最后一个）
+  const sorted = [...state.checkpoints].sort((a,b) => a.date > b.date ? 1 : -1);
+  const latest = sorted[sorted.length - 1];
+  return state.funds.map((f, i) => (latest.navs && latest.navs[i] != null) ? latest.navs[i] : (f.originNav || f.nav));
+}
+
+// 计算每支基金的阶段/总盈亏
+function getFundPnl(f, i) {
+  const baseNavs = getBaseNavs();
+  const baseNav = baseNavs[i] || f.nav;
+  const baseVal = baseNav * f.shares;        // 基准时市值
+  const curVal  = f.nav * f.shares;          // 当前市值
+  const pnl     = curVal - baseVal;
+  const pct     = baseVal > 0 ? pnl / baseVal * 100 : 0;
+  return { pnl, pct, baseVal, curVal, baseNav };
+}
+
+// ── 渲染函数 ────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderDate();
+  renderModeBanner();
+  renderCheckpointList();
+  renderMetrics();
+  renderAllocBars();
+  renderFundTable();
+  renderRebalList();
+  renderAdvice();
+  renderStrategies();
+  // sync toggle
+  document.getElementById('origin-toggle').checked = !!state.originMode;
+}
+
+function renderModeBanner() {
+  const banner = document.getElementById('mode-banner');
+  const text   = document.getElementById('mode-banner-text');
+  const hint   = document.getElementById('cp-mode-hint');
+  if (state.originMode) {
+    banner.className = 'mode-banner mode-origin';
+    text.textContent = '原始总收益模式 — 以原始买入净值为基准，显示全程真实盈亏';
+    hint.textContent = '当前：开关已开启，忽略所有初始化节点，回归原始本金';
+  } else {
+    const n = state.checkpoints.length;
+    banner.className = 'mode-banner mode-stage';
+    if (n === 0) {
+      text.textContent = '阶段收益模式 — 暂无初始化节点，以原始买入净值起算';
+      hint.textContent = '当前：无节点，以原始本金计算（与开关效果相同）';
+    } else {
+      const sorted = [...state.checkpoints].sort((a,b) => a.date > b.date ? 1 : -1);
+      const latest = sorted[sorted.length - 1];
+      text.textContent = `阶段收益模式 — 从「${latest.label}」(${latest.date}) 起算本阶段收益`;
+      hint.textContent = `当前：以最近节点「${latest.label}」为基准`;
+    }
+  }
+}
+
+function renderCheckpointList() {
+  const el = document.getElementById('cp-list');
+  if (!state.checkpoints.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--color-text-secondary);padding:4px 0;">暂无初始化节点。添加第一个节点后，可在此切换盈利起算时间。</p>';
+    return;
+  }
+  const sorted = [...state.checkpoints].sort((a,b) => a.date > b.date ? 1 : -1);
+  const latestId = sorted[sorted.length-1].id;
+  el.innerHTML = sorted.map(cp => {
+    const isLatest = cp.id === latestId;
+    const navsStr = cp.navs ? cp.navs.map(n => n.toFixed(3)).join(', ') : '—';
+    return `<div class="cp-item ${isLatest&&!state.originMode?'active-cp':''}">
+      <span class="cp-dot ${cp.isOrigin?'origin':''}"></span>
+      <div style="flex:1;">
+        <div class="cp-name">${cp.label} ${isLatest&&!state.originMode?'<span style="font-size:10px;color:#185fa5;">· 当前基准</span>':''}</div>
+        <div class="cp-meta">${cp.date} &nbsp;·&nbsp; 净值快照：${navsStr}</div>
+      </div>
+      ${!cp.isOrigin ? `<button class="cp-del" onclick="removeCheckpoint('${cp.id}')">删除</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderDate() {
+  const d = new Date();
+  const s = d.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  document.getElementById('today-date').textContent = s;
+  document.getElementById('advice-date').textContent = s + ' · 自动生成';
+}
+
+function renderMetrics() {
+  const total = fundTotal();
+  // 计算综合盈亏（基于当前基准模式）
+  let totalPnl = 0, totalBase = 0;
+  state.funds.forEach((f,i) => {
+    const r = getFundPnl(f, i);
+    totalPnl  += r.pnl;
+    totalBase += r.baseVal;
+  });
+  const pnlPct = totalBase > 0 ? totalPnl / totalBase * 100 : 0;
+  const dd = -(Math.random() * 7 + 1.5).toFixed(1);
+
+  document.getElementById('m-total').textContent = fmtMoney(total);
+  document.getElementById('m-total-sub').textContent = '持仓总额';
+
+  const pnlEl = document.getElementById('m-pnl');
+  pnlEl.textContent = (totalPnl>=0?'+':'-') + fmtMoney(Math.abs(totalPnl));
+  pnlEl.className = 'metric-value ' + (totalPnl>=0?'up':'down');
+  document.getElementById('m-pnl-pct').textContent = (pnlPct>=0?'+':'') + pnlPct.toFixed(2) + '%';
+
+  document.getElementById('m-count').textContent = state.funds.length;
+  document.getElementById('m-dd').textContent = dd + '%';
+}
+
+function renderAllocBars() {
+  const total = fundTotal();
+  document.getElementById('alloc-bars').innerHTML = state.funds.map((f,i) => {
+    const pct = total > 0 ? (f.nav*f.shares/total*100) : 0;
+    return `<div class="alloc-row">
+      <span class="alloc-name" title="${f.name}">${f.name.length>9?f.name.slice(0,9)+'…':f.name}</span>
+      <div class="alloc-flex"><div class="alloc-bar-wrap">
+        <div class="alloc-bar" style="width:${pct.toFixed(1)}%;background:${COLORS[i%COLORS.length]};"></div>
+      </div></div>
+      <span class="alloc-pct" style="color:${COLORS[i%COLORS.length]}">${pct.toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderFundTable() {
+  const total = fundTotal();
+  document.getElementById('fund-tbody').innerHTML = state.funds.map((f,i) => {
+    const val  = f.nav * f.shares;
+    const pct  = total > 0 ? (val/total*100) : 0;
+    const adv  = fundAdvice(f, i);
+    const r    = getFundPnl(f, i);
+    const pnlColor = r.pnl >= 0 ? '#e24b4a' : '#1d9e75';
+    const pnlSign  = r.pnl >= 0 ? '+' : '';
+    const stageChips = !state.originMode && state.checkpoints.length > 0
+      ? buildStageChips(f, i)
+      : '';
+    return `<tr>
+      <td><div class="fund-name">${f.name}</div><div class="fund-code">${f.code} · ${f.type}</div>${stageChips}</td>
+      <td>${f.nav.toFixed(3)}<br><span style="font-size:11px;color:var(--color-text-secondary);">基准 ${(r.baseNav||f.nav).toFixed(3)}</span></td>
+      <td>${fmtInt(f.shares)}</td>
+      <td>${fmtMoney(val)}<br><span style="font-size:11px;color:${pnlColor};">${pnlSign}${fmtMoney(r.pnl)} (${pnlSign}${r.pct.toFixed(2)}%)</span></td>
+      <td>${pct.toFixed(1)}% <span style="font-size:11px;color:var(--color-text-secondary);">/ ${f.target}%</span></td>
+      <td><span class="badge badge-${adv.cls}">${adv.label}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openEditModal(${i})">编辑</button>
+        <button class="btn" style="padding:4px 10px;font-size:11px;color:var(--color-text-danger);border-color:var(--color-text-danger);" onclick="removeFund(${i})">移除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// 生成各阶段收益小标签
+function buildStageChips(f, i) {
+  const sorted = [...state.checkpoints].sort((a,b) => a.date > b.date ? 1 : -1);
+  // 构建阶段列表（原始→节点1→节点2→...→当前）
+  const points = [
+    { label: '原始', nav: f.originNav || f.nav },
+    ...sorted.map(cp => ({ label: cp.label, nav: cp.navs?.[i] ?? (f.originNav || f.nav) })),
+    { label: '当前', nav: f.nav }
+  ];
+  return '<div class="stage-chips">' + points.slice(0,-1).map((p, idx) => {
+    const nextNav = points[idx+1].nav;
+    const chg = p.nav > 0 ? (nextNav - p.nav) / p.nav * 100 : 0;
+    const cls = chg >= 0 ? 'pos' : 'neg';
+    const sign = chg >= 0 ? '+' : '';
+    return `<span class="stage-chip ${cls}">${p.label}→${points[idx+1].label} ${sign}${chg.toFixed(1)}%</span>`;
+  }).join('') + '</div>';
+}
+
+function removeFund(i) {
+  if (!confirm(`确认移除「${state.funds[i].name}」？`)) return;
+  state.funds.splice(i, 1);
+  saveState(); renderAll();
+  showToast('基金已移除');
+}
+
+// ── 编辑弹窗 ─────────────────────────────────────────────────────────────────
+let editingIndex = -1;
+
+function openEditModal(i) {
+  editingIndex = i;
+  const f = state.funds[i];
+  document.getElementById('edit-code').value       = f.code       || '';
+  document.getElementById('edit-name').value       = f.name       || '';
+  document.getElementById('edit-nav').value        = f.nav        != null ? f.nav        : '';
+  document.getElementById('edit-origin-nav').value = f.originNav  != null ? f.originNav  : '';
+  document.getElementById('edit-shares').value     = f.shares     != null ? f.shares     : '';
+  document.getElementById('edit-target').value     = f.target     != null ? f.target     : '';
+  document.getElementById('edit-type').value       = f.type       || 'A股公募';
+  document.getElementById('edit-modal-subtitle').textContent = `${f.name}（${f.code}）`;
+  document.getElementById('edit-lookup-status').innerHTML = '';
+  document.getElementById('edit-nav-hint').textContent = '';
+
+  const overlay = document.getElementById('edit-modal-overlay');
+  overlay.style.display = 'flex';
+  // 防止背景滚动
+  document.body.style.overflow = 'hidden';
+  // 点遮罩关闭
+  overlay.onclick = e => { if (e.target === overlay) closeEditModal(); };
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+  editingIndex = -1;
+}
+
+function saveEditFund() {
+  if (editingIndex < 0) return;
+  const code      = document.getElementById('edit-code').value.trim();
+  const name      = document.getElementById('edit-name').value.trim();
+  const nav       = parseFloat(document.getElementById('edit-nav').value);
+  const originNav = parseFloat(document.getElementById('edit-origin-nav').value);
+  const shares    = parseInt(document.getElementById('edit-shares').value);
+  const target    = parseFloat(document.getElementById('edit-target').value);
+  const type      = document.getElementById('edit-type').value;
+
+  if (!name || isNaN(nav) || isNaN(originNav) || isNaN(shares) || isNaN(target)) {
+    document.getElementById('edit-lookup-status').innerHTML =
+      '<span style="color:var(--color-text-danger);">✗ 请填写完整信息</span>';
+    return;
+  }
+  // 代码冲突检测（排除自身）
+  const conflict = state.funds.findIndex((f, i) => i !== editingIndex && f.code === code && code);
+  if (conflict >= 0) {
+    document.getElementById('edit-lookup-status').innerHTML =
+      `<span style="color:var(--color-text-danger);">✗ 代码与「${state.funds[conflict].name}」冲突</span>`;
+    return;
+  }
+
+  state.funds[editingIndex] = { ...state.funds[editingIndex], code, name, type, nav, originNav, shares, target };
+  saveState(); renderAll();
+  closeEditModal();
+  showToast(`「${name}」已更新`);
+}
+
+// 弹窗内的净值查询（复用 JSONP 逻辑，写入 edit-* 字段）
+let editLookupTimer = null;
+let editLastCode = '';
+
+function fetchFundInfoEdit(code, forceRefresh) {
+  code = (code || '').trim().replace(/\D/g,'');
+  if (code.length !== 6) {
+    document.getElementById('edit-lookup-status').innerHTML =
+      '<span style="color:var(--color-text-danger);">✗ 请输入6位基金代码</span>';
+    return;
+  }
+  if (!forceRefresh && code === editLastCode) return;
+  editLastCode = code;
+
+  const statusEl = document.getElementById('edit-lookup-status');
+  const hintEl   = document.getElementById('edit-nav-hint');
+  const btn      = document.getElementById('edit-lookup-btn');
+  const refBtn   = document.getElementById('edit-refresh-btn');
+  statusEl.innerHTML = '<span style="color:var(--color-text-secondary);">⏳ 查询中…</span>';
+  hintEl.textContent = '';
+  btn.disabled = refBtn.disabled = true;
+
+  const cbName = '_editfundcb_' + Date.now();
+  const script  = document.createElement('script');
+  let settled = false;
+
+  const cleanup = () => {
+    delete window[cbName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+    btn.disabled = refBtn.disabled = false;
+  };
+
+  const timeout = setTimeout(() => {
+    if (settled) return; settled = true; cleanup();
+    statusEl.innerHTML = '<span style="color:var(--color-text-danger);">✗ 查询超时，请手动填写</span>';
+  }, 8000);
+
+  window[cbName] = (data) => {
+    if (settled) return; settled = true;
+    clearTimeout(timeout); cleanup();
+    if (!data || !data.name) {
+      statusEl.innerHTML = '<span style="color:var(--color-text-danger);">✗ 未找到该代码</span>';
+      return;
+    }
+    // 只回填名称（如果当前为空）和净值（始终更新）
+    const nameEl = document.getElementById('edit-name');
+    if (!nameEl.value) nameEl.value = data.name;
+
+    const navVal = data.gsz && parseFloat(data.gsz) > 0 ? data.gsz : data.dwjz;
+    if (navVal) document.getElementById('edit-nav').value = parseFloat(navVal).toFixed(4);
+
+    if (data.gsz && parseFloat(data.gsz) > 0) {
+      const chg = parseFloat(data.gszzl || 0);
+      hintEl.innerHTML = `估算净值 ${data.gsz}（${chg>=0?'+':''}${chg}%）&nbsp;·&nbsp; 上一日结算 ${data.dwjz}（${data.jzrq}）`;
+      hintEl.style.color = chg >= 0 ? '#e24b4a' : '#1d9e75';
+    } else if (data.dwjz) {
+      hintEl.textContent = `上一日结算净值（${data.jzrq}）`;
+      hintEl.style.color = 'var(--color-text-secondary)';
+    }
+    statusEl.innerHTML = `<span style="color:var(--color-text-success);">✓ ${data.name} · 净值已更新</span>`;
+  };
+
+  script.src = `https://fundgz.1234567.com.cn/js/${code}.js?callback=${cbName}&rt=${Date.now()}`;
+  script.onerror = () => {
+    if (settled) return; settled = true; clearTimeout(timeout); cleanup();
+    statusEl.innerHTML = '<span style="color:var(--color-text-danger);">✗ 接口无响应，请手动填写</span>';
+  };
+  document.head.appendChild(script);
+}
+
+function renderRebalList() {
+  const total = fundTotal();
+  if (!state.funds.length) {
+    document.getElementById('rebal-list').innerHTML = '<p style="font-size:13px;color:var(--color-text-secondary);padding:8px 0;">暂无持仓，请先添加基金</p>';
+    return;
+  }
+  document.getElementById('rebal-list').innerHTML = state.funds.map((f,i) => {
+    const val = f.nav * f.shares;
+    const cur = total > 0 ? (val/total*100) : 0;
+    const diff = f.target - cur;
+    const amt = Math.abs(diff/100 * total);
+    const isBuy = diff > 0;
+    const barW = Math.min(Math.abs(diff) * 3.5, 100);
+    const barColor = isBuy ? '#1D9E75' : '#E24B4A';
+    return `<div class="rebal-row">
+      <span class="rebal-name" title="${f.name}">${f.name.length>9?f.name.slice(0,9)+'…':f.name}</span>
+      <div class="rebal-flex">
+        <div class="diff-bar"><div class="diff-fill" style="width:${barW}%;background:${barColor};"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary);margin-top:4px;">
+          <span>当前 ${cur.toFixed(1)}%</span><span>目标 ${f.target}%</span>
+        </div>
+      </div>
+      <span class="rebal-action" style="color:${barColor};">${isBuy?'买入':'卖出'} ${fmtMoney(amt)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderAdvice() {
+  document.getElementById('strategy-label').textContent = state.strategies[state.activeStrategy].name;
+  const adviceItems = state.funds.map((f,i) => {
+    const adv = fundAdvice(f, i);
+    const total = fundTotal();
+    const cur = total > 0 ? (f.nav*f.shares/total*100) : 0;
+    const diff = (cur - f.target).toFixed(1);
+    let desc = '';
+    if (adv.cls === 'buy')  desc = `当前仓位 ${cur.toFixed(1)}%，低于目标 ${f.target}%，建议适量补仓，参考加仓金额 ${fmtMoney(Math.abs(diff/100*total))}。`;
+    if (adv.cls === 'sell') desc = `当前仓位 ${cur.toFixed(1)}%，高于目标 ${f.target}%，建议逐步减仓，参考减仓金额 ${fmtMoney(Math.abs(diff/100*total))}。`;
+    if (adv.cls === 'hold') desc = `当前仓位 ${cur.toFixed(1)}%，接近目标 ${f.target}%，维持持仓，等待市场信号。`;
+    return `<div class="advice-item">
+      <div class="advice-icon ${adv.cls}">${adv.icon}</div>
+      <div><div class="advice-body-title">${f.name} — ${adv.label}</div>
+      <div class="advice-body-desc">${desc}</div></div>
+    </div>`;
+  });
+  document.getElementById('advice-list').innerHTML = adviceItems.join('');
+}
+
+function renderStrategies() {
+  document.getElementById('strategy-list').innerHTML = state.strategies.map((s,i) => `
+    <div class="strategy-card ${i===state.activeStrategy?'active':''}" onclick="selectStrategy(${i})">
+      <div class="strategy-top">
+        <span class="strategy-name">${s.name}</span>
+        ${i===state.activeStrategy?'<span class="in-use-badge">使用中</span>':''}
+      </div>
+      <div class="strategy-desc">${s.desc}</div>
+      <div class="rules">${s.rules.map(r=>`<span class="rule-chip">${r}</span>`).join('')}</div>
+    </div>`).join('');
+}
+
+// ── 交互 ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const names = ['overview','allocate','advice','strategy'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===tab));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+}
+
+function selectStrategy(i) {
+  state.activeStrategy = i;
+  saveState(); renderStrategies(); renderAdvice();
+  showToast('已切换至：' + state.strategies[i].name);
+}
+
+// ── 初始化节点管理 ───────────────────────────────────────────────────────────
+function addCheckpoint() {
+  const label = document.getElementById('cp-inp-label').value.trim();
+  const date  = document.getElementById('cp-inp-date').value;
+  const navsRaw = document.getElementById('cp-inp-navs').value.trim();
+  if (!label || !date) { showToast('请填写节点名称和日期'); return; }
+  const navs = navsRaw
+    ? navsRaw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n))
+    : state.funds.map(f => f.nav);  // 留空则自动用当前净值
+
+  if (navs.length !== state.funds.length) {
+    showToast(`净值数量 (${navs.length}) 与基金数量 (${state.funds.length}) 不符`); return;
+  }
+  const id = Date.now().toString();
+  state.checkpoints.push({ id, label, date, navs });
+  saveState(); renderAll();
+  document.getElementById('cp-inp-label').value = '';
+  document.getElementById('cp-inp-date').value  = '';
+  document.getElementById('cp-inp-navs').value  = '';
+  showToast(`节点「${label}」已记录`);
+}
+
+function removeCheckpoint(id) {
+  state.checkpoints = state.checkpoints.filter(c => c.id !== id);
+  saveState(); renderAll();
+  showToast('节点已删除');
+}
+
+function onToggleOrigin(checked) {
+  state.originMode = checked;
+  saveState(); renderAll();
+  showToast(checked ? '已切换：原始总收益模式' : '已切换：阶段收益模式');
+}
+
+// ── 天天基金代码自动查询（JSONP）────────────────────────────────────────────
+let lookupDebounceTimer = null;
+let lastLookedUpCode = '';
+
+function onCodeInput(val) {
+  // 实时格式提示
+  const status = document.getElementById('lookup-status');
+  const clean = val.replace(/\D/g,'');
+  if (clean !== val) document.getElementById('inp-code').value = clean;
+  if (clean.length < 6) {
+    setLookupStatus('', '');
+    hideAutoTags();
+    return;
+  }
+  // 6位时防抖触发
+  clearTimeout(lookupDebounceTimer);
+  lookupDebounceTimer = setTimeout(() => fetchFundInfo(clean), 400);
+}
+
+function setLookupStatus(type, msg) {
+  const el = document.getElementById('lookup-status');
+  const colors = { loading:'var(--color-text-secondary)', ok:'var(--color-text-success)', err:'var(--color-text-danger)', '':'' };
+  const icons  = { loading:'⏳', ok:'✓', err:'✗', '' :'' };
+  el.innerHTML = msg ? `<span style="color:${colors[type]}">${icons[type]} ${msg}</span>` : '';
+}
+
+function hideAutoTags() {
+  ['inp-name-tag','inp-nav-tag'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const hint = document.getElementById('inp-nav-hint');
+  if (hint) hint.textContent = '';
+}
+
+// 判断基金类型
+function guessFundType(name) {
+  if (!name) return 'A股公募';
+  if (/ETF|指数|LOF/i.test(name)) return 'ETF指数';
+  if (/QDII|全球|海外|美国|纳斯达克|标普|港股/i.test(name)) return 'QDII';
+  if (/债|货币|理财/i.test(name)) return '债券基金';
+  return 'A股公募';
+}
+
+function fetchFundInfo(code) {
+  code = (code || '').trim().replace(/\D/g,'');
+  if (code.length !== 6) { setLookupStatus('err', '请输入6位基金代码'); return; }
+  if (code === lastLookedUpCode) return;   // 避免重复查询
+  lastLookedUpCode = code;
+
+  setLookupStatus('loading', '正在从天天基金查询…');
+  const btn = document.getElementById('lookup-btn');
+  btn.disabled = true;
+  btn.textContent = '查询中…';
+  hideAutoTags();
+
+  // 用 JSONP：动态注入 <script> 标签绕过跨域
+  const cbName = '_fundcb_' + Date.now();
+  const script  = document.createElement('script');
+  let settled = false;
+
+  const cleanup = () => {
+    delete window[cbName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+    btn.disabled = false;
+    btn.textContent = '查询';
+  };
+
+  // 超时保护
+  const timeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    setLookupStatus('err', '查询超时，请检查网络或手动填写');
+  }, 8000);
+
+  window[cbName] = (data) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeout);
+    cleanup();
+
+    if (!data || !data.name) {
+      setLookupStatus('err', '未找到该基金代码，请确认后重试');
+      return;
+    }
+
+    // 回填名称
+    const nameEl = document.getElementById('inp-name');
+    nameEl.value = data.name;
+    document.getElementById('inp-name-tag').style.display = '';
+
+    // 回填净值：优先用估算净值 gsz（盘中），否则用上一日净值 dwjz
+    const navVal = data.gsz && parseFloat(data.gsz) > 0 ? data.gsz : data.dwjz;
+    const navEl  = document.getElementById('inp-nav');
+    navEl.value  = navVal ? parseFloat(navVal).toFixed(4) : '';
+    document.getElementById('inp-nav-tag').style.display = navVal ? '' : 'none';
+
+    // 净值来源说明
+    const hint = document.getElementById('inp-nav-hint');
+    if (data.gsz && parseFloat(data.gsz) > 0) {
+      const chg = parseFloat(data.gszzl||0);
+      hint.innerHTML = `估算净值 ${data.gsz}（${chg>=0?'+':''}${chg}%）&nbsp;·&nbsp; 上一日结算 ${data.dwjz}（${data.jzrq}）`;
+      hint.style.color = chg >= 0 ? '#e24b4a' : '#1d9e75';
+    } else if (data.dwjz) {
+      hint.textContent = `上一日结算净值（${data.jzrq}）`;
+      hint.style.color = 'var(--color-text-secondary)';
+    }
+
+    // 自动识别基金类型
+    const typeEl = document.getElementById('inp-type');
+    const guessed = guessFundType(data.name);
+    typeEl.value = guessed;
+
+    // 如果买入净值为空，提示用户填写
+    const originNavEl = document.getElementById('inp-origin-nav');
+    if (!originNavEl.value) originNavEl.focus();
+
+    setLookupStatus('ok', `${data.name} · 净值已回填`);
+  };
+
+  script.src = `https://fundgz.1234567.com.cn/js/${code}.js?callback=${cbName}&rt=${Date.now()}`;
+  script.onerror = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeout);
+    cleanup();
+    // 接口挂了，降级到东方财富静态详情页
+    setLookupStatus('err', '天天基金接口无响应，请手动填写或稍后重试');
+  };
+  document.head.appendChild(script);
+}
+
+function addFund() {
+  const code      = document.getElementById('inp-code').value.trim();
+  const name      = document.getElementById('inp-name').value.trim();
+  const nav       = parseFloat(document.getElementById('inp-nav').value);
+  const originNav = parseFloat(document.getElementById('inp-origin-nav').value);
+  const shares    = parseInt(document.getElementById('inp-shares').value);
+  const target    = parseFloat(document.getElementById('inp-target').value);
+  const type      = document.getElementById('inp-type').value;
+  if (!code || !name || isNaN(nav) || isNaN(originNav) || isNaN(shares) || isNaN(target)) {
+    showToast('请填写完整信息（含买入净值）'); return;
+  }
+  if (state.funds.find(f => f.code===code)) { showToast('该代码已存在'); return; }
+  state.funds.push({ code, name, type, nav, originNav, shares, target });
+  saveState(); renderAll();
+  ['inp-code','inp-name','inp-nav','inp-origin-nav','inp-shares','inp-target'].forEach(id => document.getElementById(id).value='');
+  lastLookedUpCode = '';
+  hideAutoTags();
+  setLookupStatus('', '');
+  document.getElementById('inp-nav-hint').textContent = '';
+  showToast('基金已添加');
+}
+
+function saveStrategy() {
+  const tp  = document.getElementById('tp-val').value;
+  const sl  = document.getElementById('sl-val').value;
+  const dca = document.getElementById('dca-day').value;
+  const amt = document.getElementById('dca-amt').value;
+  const rules = [];
+  if (tp)  rules.push('止盈'+tp+'%');
+  if (sl)  rules.push('止损'+sl+'%');
+  if (dca) rules.push(dca+'定投');
+  if (amt) rules.push('单次¥'+amt);
+  if (rules.length) {
+    state.strategies[state.activeStrategy].rules = rules;
+    saveState(); renderStrategies();
+    showToast('策略已保存');
+  } else { showToast('请至少填写一项规则'); }
+}
+
+// ── AI 对话（Anthropic API）─────────────────────────────────────────────────
+let aiHistory = [];
+
+function buildContext(type) {
+  const total = fundTotal();
+  const summary = state.funds.map(f => {
+    const val = f.nav * f.shares;
+    const pct = total > 0 ? (val/total*100).toFixed(1) : 0;
+    return `${f.name}(${f.code})：净值${f.nav}，份额${f.shares}，市值${fmtMoney(val)}，仓位${pct}%，目标${f.target}%`;
+  }).join('\n');
+  const strat = state.strategies[state.activeStrategy];
+  const ctx = `当前日期：${new Date().toLocaleDateString('zh-CN')}
+当前策略：${strat.name}（${strat.rules.join('，')}）
+持仓总览（共${state.funds.length}支）：
+${summary}`;
+
+  const prompts = {
+    default:   `${ctx}\n\n请基于上述持仓信息，给出今日操作建议，包括每支基金的具体操作方向和理由。`,
+    rebalance: `${ctx}\n\n请计算详细的再平衡操作方案，给出每支基金需要买入或卖出的具体金额和份额。`,
+    deep:      `${ctx}\n\n请给出深度分析，包括今日具体操作建议、买卖时机和参考价位。`,
+    market:    `${ctx}\n\n请分析近期A股和全球市场走势，分析对我各基金持仓的影响，哪些需要重点关注？`,
+    risk:      `${ctx}\n\n请评估我当前持仓的风险状况，包括集中度风险、市场风险、流动性风险等，并给出建议。`,
+    strategy:  `${ctx}\n\n请根据我的持仓情况，分析当前策略参数是否合理，给出优化建议。`,
+  };
+  return prompts[type] || prompts.default;
+}
+
+function openAI(type='default') {
+  switchTab('advice');
+  const section = document.getElementById('ai-section');
+  section.style.display = 'block';
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const userMsg = buildContext(type);
+  sendToAI(userMsg);
+}
+
+async function askAI() {
+  const input = document.getElementById('ai-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  sendToAI(msg);
+}
+
+async function sendToAI(userMsg) {
+  if (ANTHROPIC_API_KEY === 'YOUR_API_KEY_HERE') {
+    document.getElementById('ai-section').style.display = 'block';
+    document.getElementById('ai-output').textContent =
+      '⚠️ 请先在代码顶部替换 ANTHROPIC_API_KEY 为你的真实 API Key。\n\n' +
+      '获取地址：https://console.anthropic.com/settings/keys';
+    return;
+  }
+
+  aiHistory.push({ role:'user', content: userMsg });
+
+  const outputEl  = document.getElementById('ai-output');
+  const loadingEl = document.getElementById('ai-loading');
+  outputEl.textContent  = '';
+  loadingEl.style.display = 'block';
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':         'application/json',
+        'x-api-key':            ANTHROPIC_API_KEY,
+        'anthropic-version':    '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      MODEL,
+        max_tokens: 1200,
+        system:     '你是一位专业的基金投资顾问，擅长A股公募基金和ETF指数基金。请用简洁专业的中文回答，给出具体可操作的建议。',
+        messages:   aiHistory,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const reply = data.content.filter(b => b.type==='text').map(b => b.text).join('');
+    aiHistory.push({ role:'assistant', content: reply });
+
+    loadingEl.style.display = 'none';
+    outputEl.textContent = reply;
+
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    outputEl.textContent = '请求失败：' + e.message;
+  }
+}
+
+// ── OCR 截图识别 ─────────────────────────────────────────────────────────────
+let ocrImageBase64 = null;
+let ocrImageMime   = null;
+let ocrParsedFunds = [];
+
+function switchAddTab(tab) {
+  const isOcr = tab === 'ocr';
+  document.getElementById('panel-ocr').style.display    = isOcr ? '' : 'none';
+  document.getElementById('panel-manual').style.display = isOcr ? 'none' : '';
+  const ocrBtn    = document.getElementById('tab-ocr-btn');
+  const manualBtn = document.getElementById('tab-manual-btn');
+  if (isOcr) {
+    ocrBtn.style.background = 'var(--color-text-primary)';
+    ocrBtn.style.color      = 'var(--color-bg-primary)';
+    ocrBtn.style.borderColor = 'transparent';
+    manualBtn.style.background = '';
+    manualBtn.style.color      = '';
+    manualBtn.style.borderColor = '';
+  } else {
+    manualBtn.style.background = 'var(--color-text-primary)';
+    manualBtn.style.color      = 'var(--color-bg-primary)';
+    manualBtn.style.borderColor = 'transparent';
+    ocrBtn.style.background = '';
+    ocrBtn.style.color      = '';
+    ocrBtn.style.borderColor = '';
+  }
+}
+
+function onOcrDrop(e) {
+  e.preventDefault();
+  document.getElementById('ocr-dropzone').classList.remove('dz-over');
+  const file = e.dataTransfer?.files?.[0];
+  if (file) processOcrFile(file);
+}
+
+function onOcrFileChosen(e) {
+  const file = e.target.files?.[0];
+  if (file) processOcrFile(file);
+}
+
+function processOcrFile(file) {
+  const allowed = ['image/png','image/jpeg','image/jpg','image/webp','image/heic','image/heif'];
+  // HEIC/HEIF might arrive with non-standard mime on some browsers; accept by extension too
+  const ext = file.name.split('.').pop().toLowerCase();
+  const extOk = ['png','jpg','jpeg','webp','heic','heif'].includes(ext);
+  if (!allowed.includes(file.type) && !extOk) {
+    showToast('不支持该图片格式，请选择 PNG/JPG/WebP/HEIC'); return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    ocrImageBase64 = dataUrl.split(',')[1];
+    // normalise mime: treat heic/heif as jpeg for API (Claude accepts it)
+    ocrImageMime = (file.type && file.type !== 'application/octet-stream')
+      ? file.type.replace('heif','jpeg').replace('heic','jpeg')
+      : 'image/jpeg';
+
+    // show preview
+    document.getElementById('ocr-dropzone').style.display = 'none';
+    document.getElementById('ocr-preview-wrap').style.display = '';
+    document.getElementById('ocr-result-wrap').style.display = 'none';
+    document.getElementById('ocr-loading').style.display = 'none';
+    document.getElementById('ocr-cards').innerHTML = '';
+    document.getElementById('ocr-add-all-btn').style.display = 'none';
+
+    const img = document.getElementById('ocr-preview-img');
+    img.src = dataUrl;
+    document.getElementById('ocr-filename').textContent = file.name;
+    const kb = (file.size / 1024).toFixed(0);
+    document.getElementById('ocr-fileinfo').textContent = `${file.type || ext.toUpperCase()} · ${kb} KB`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearOcrFile() {
+  ocrImageBase64 = null; ocrImageMime = null; ocrParsedFunds = [];
+  document.getElementById('ocr-file-input').value = '';
+  document.getElementById('ocr-dropzone').style.display = '';
+  document.getElementById('ocr-preview-wrap').style.display = 'none';
+  document.getElementById('ocr-result-wrap').style.display = 'none';
+  document.getElementById('ocr-loading').style.display = 'none';
+  document.getElementById('ocr-cards').innerHTML = '';
+  document.getElementById('ocr-add-all-btn').style.display = 'none';
+}
+
+async function runOcrAnalysis() {
+  if (!ocrImageBase64) { showToast('请先选择截图'); return; }
+  if (ANTHROPIC_API_KEY === 'YOUR_API_KEY_HERE') {
+    showToast('请先填写 API Key'); return;
+  }
+  document.getElementById('ocr-loading').style.display = '';
+  document.getElementById('ocr-result-wrap').style.display = 'none';
+  document.getElementById('ocr-analyze-btn').disabled = true;
+
+  const prompt = `这是一张基金持仓截图（来自手机App，如支付宝/天天基金/招商银行/华夏基金等）。
+请识别图中所有基金持仓信息，以JSON数组返回，每个基金一个对象，字段如下：
+- code: 基金代码（6位数字，如没有则留空字符串）
+- name: 基金名称（完整名称）
+- nav: 当前净值或单位净值（数字，如没有则为null）
+- shares: 持有份额（数字，如没有则为null）
+- marketValue: 当前市值/持有金额（数字，如没有则为null）
+- returnRate: 累计收益率或持有收益率（百分比数字，如+12.5，如没有则为null）
+- type: 基金类型，从以下选一个："A股公募"/"ETF指数"/"QDII"/"债券基金"（根据名称判断）
+
+只返回JSON数组，不要任何解释文字，不要markdown代码块符号。
+如果图中没有基金信息，返回空数组 []。`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1500,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: ocrImageMime, data: ocrImageBase64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    const raw  = data.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    // strip possible markdown fences
+    const clean = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    let funds;
+    try { funds = JSON.parse(clean); } catch { throw new Error('识别结果格式异常，请重试'); }
+
+    ocrParsedFunds = Array.isArray(funds) ? funds : [];
+    renderOcrCards(ocrParsedFunds);
+  } catch(e) {
+    document.getElementById('ocr-loading').style.display = 'none';
+    document.getElementById('ocr-result-wrap').style.display = '';
+    document.getElementById('ocr-cards').innerHTML =
+      `<p style="font-size:13px;color:var(--color-text-danger);padding:8px 0;">识别失败：${e.message}</p>`;
+  } finally {
+    document.getElementById('ocr-analyze-btn').disabled = false;
+  }
+}
+
+function renderOcrCards(funds) {
+  document.getElementById('ocr-loading').style.display = 'none';
+  document.getElementById('ocr-result-wrap').style.display = '';
+  const container = document.getElementById('ocr-cards');
+
+  if (!funds.length) {
+    container.innerHTML = '<p style="font-size:13px;color:var(--color-text-secondary);padding:8px 0;">未识别到基金信息，请换一张截图或手动填写。</p>';
+    document.getElementById('ocr-add-all-btn').style.display = 'none';
+    return;
+  }
+
+  container.innerHTML = funds.map((f, i) => {
+    // derive originNav: if returnRate known, back-calculate; else same as nav
+    let originNav = f.nav;
+    if (f.nav && f.returnRate != null) {
+      originNav = +(f.nav / (1 + f.returnRate / 100)).toFixed(3);
+    }
+    // derive shares from marketValue/nav if missing
+    let shares = f.shares;
+    if (!shares && f.marketValue && f.nav) shares = Math.round(f.marketValue / f.nav);
+
+    return `<div class="ocr-card" id="ocr-card-${i}">
+      <div class="ocr-card-header">
+        <div>
+          <div class="ocr-card-name">${f.name || '未知基金'}</div>
+          <div class="ocr-card-code">${f.code || '代码未识别'} · 请确认下方信息后添加</div>
+        </div>
+        <span class="badge ${f.returnRate>=0?'badge-buy':'badge-sell'}" style="font-size:11px;">
+          ${f.returnRate!=null?(f.returnRate>=0?'+':'')+f.returnRate.toFixed(2)+'%':'收益未知'}
+        </span>
+      </div>
+      <div class="ocr-fields">
+        <div class="ocr-field"><label>基金代码</label><input id="ocrf-code-${i}"   value="${f.code||''}"       placeholder="6位代码" /></div>
+        <div class="ocr-field"><label>基金名称</label><input id="ocrf-name-${i}"   value="${f.name||''}"       placeholder="基金名称" /></div>
+        <div class="ocr-field"><label>当前净值</label><input id="ocrf-nav-${i}"    value="${f.nav!=null?f.nav:''}"  type="number" step="0.001" placeholder="净值" /></div>
+        <div class="ocr-field"><label>买入净值（原始）</label><input id="ocrf-onav-${i}" value="${originNav!=null?originNav:''}" type="number" step="0.001" placeholder="买入时净值" /></div>
+        <div class="ocr-field"><label>持有份额</label><input id="ocrf-shares-${i}" value="${shares!=null?shares:''}" type="number" step="1"     placeholder="份额" /></div>
+        <div class="ocr-field"><label>目标仓位 (%)</label><input id="ocrf-target-${i}" value="20"               type="number" placeholder="如 20" /></div>
+        <div class="ocr-field"><label>基金类型</label>
+          <select id="ocrf-type-${i}">
+            <option value="A股公募" ${f.type==='A股公募'?'selected':''}>A股公募</option>
+            <option value="ETF指数" ${f.type==='ETF指数'?'selected':''}>ETF指数</option>
+            <option value="QDII"    ${f.type==='QDII'?'selected':''}>QDII</option>
+            <option value="债券基金" ${f.type==='债券基金'?'selected':''}>债券基金</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary ocr-add-btn" onclick="addSingleOcrFund(${i})">添加这支基金</button>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ocr-add-all-btn').style.display = funds.length > 1 ? '' : 'none';
+}
+
+function addSingleOcrFund(i) {
+  const code      = document.getElementById(`ocrf-code-${i}`).value.trim();
+  const name      = document.getElementById(`ocrf-name-${i}`).value.trim();
+  const nav       = parseFloat(document.getElementById(`ocrf-nav-${i}`).value);
+  const originNav = parseFloat(document.getElementById(`ocrf-onav-${i}`).value);
+  const shares    = parseInt(document.getElementById(`ocrf-shares-${i}`).value);
+  const target    = parseFloat(document.getElementById(`ocrf-target-${i}`).value);
+  const type      = document.getElementById(`ocrf-type-${i}`).value;
+  if (!name || isNaN(nav) || isNaN(originNav) || isNaN(shares) || isNaN(target)) {
+    showToast('请补全第 '+(i+1)+' 支基金的信息'); return;
+  }
+  if (code && state.funds.find(f=>f.code===code)) { showToast(`${name} 已存在`); return; }
+  state.funds.push({ code, name, type, nav, originNav, shares, target });
+  saveState(); renderAll();
+  // visually mark card as done
+  const card = document.getElementById(`ocr-card-${i}`);
+  if (card) {
+    card.style.opacity = '0.45';
+    card.style.pointerEvents = 'none';
+    card.querySelector('.ocr-card-code').textContent = '✓ 已添加';
+  }
+  showToast(`${name} 已添加`);
+}
+
+function addAllOcrFunds() {
+  let added = 0, skipped = 0;
+  ocrParsedFunds.forEach((_, i) => {
+    const card = document.getElementById(`ocr-card-${i}`);
+    if (card && card.style.opacity === '0.45') return; // already added
+    const code      = document.getElementById(`ocrf-code-${i}`)?.value.trim() || '';
+    const name      = document.getElementById(`ocrf-name-${i}`)?.value.trim() || '';
+    const nav       = parseFloat(document.getElementById(`ocrf-nav-${i}`)?.value);
+    const originNav = parseFloat(document.getElementById(`ocrf-onav-${i}`)?.value);
+    const shares    = parseInt(document.getElementById(`ocrf-shares-${i}`)?.value);
+    const target    = parseFloat(document.getElementById(`ocrf-target-${i}`)?.value) || 20;
+    const type      = document.getElementById(`ocrf-type-${i}`)?.value || 'A股公募';
+    if (!name || isNaN(nav) || isNaN(originNav) || isNaN(shares)) { skipped++; return; }
+    if (code && state.funds.find(f=>f.code===code)) { skipped++; return; }
+    state.funds.push({ code, name, type, nav, originNav, shares, target });
+    added++;
+    if (card) { card.style.opacity='0.45'; card.style.pointerEvents='none'; }
+  });
+  saveState(); renderAll();
+  showToast(`已添加 ${added} 支基金${skipped?'，跳过 '+skipped+' 支':''}`);
+}
+
+// ── 初始化 ───────────────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>
