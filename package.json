@@ -1,6 +1,6 @@
 {
   "name": "fund-dashboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "基金投资组合仪表板应用",
   "main": "fund_dashboard.html",
   "scripts": {
