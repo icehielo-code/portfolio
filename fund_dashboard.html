@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>基金管理仪表板</title>
+  <title>CHONG的基金管理工具</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -407,7 +407,7 @@
 
         <!-- 识别中 loading -->
         <div id="ocr-loading" style="display:none;text-align:center;padding:1.5rem 0;">
-          <div style="font-size:13px;color:var(--color-text-secondary);">AI 正在识别截图中的基金信息…</div>
+          <div id="ocr-progress-text" style="font-size:13px;color:var(--color-text-secondary);">AI 正在识别截图中的基金信息…</div>
           <div style="margin-top:8px;display:flex;justify-content:center;gap:5px;">
             <span style="width:6px;height:6px;border-radius:50%;background:var(--color-text-secondary);animation:pulse 1.4s infinite .0s;display:inline-block;"></span>
             <span style="width:6px;height:6px;border-radius:50%;background:var(--color-text-secondary);animation:pulse 1.4s infinite .2s;display:inline-block;"></span>
@@ -621,10 +621,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── 配置：替换成你自己的 Anthropic API Key ───────────────────────────────
+// ─── 配置：替换成你自己的 API Key ─────────────────────────────────────
 // 注意：生产环境请把 Key 放服务端，不要直接暴露在前端！
-const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
-const MODEL = 'claude-sonnet-4-20250514';
+const DEEPSEEK_API_KEY = 'sk-a5abd46da8c04a10ac6db06f7534c272';
+const SILICONFLOW_API_KEY = 'sk-yzqenmrlnfupfrutajjjccuydzrvcmyvmrytjxbpmjpxarfn';  // https://cloud.siliconflow.cn/account/ak
+const AI_MODEL = 'deepseek-chat';
+const OCR_MODEL = 'deepseek-ai/DeepSeek-OCR';
 // ──────────────────────────────────────────────────────────────────────────
 
 const COLORS = ['#378ADD','#1D9E75','#E24B4A','#BA7517','#7F77DD','#D4537E','#0F6E56'];
@@ -1524,7 +1526,7 @@ function saveStrategy() {
   } else { showToast('请至少填写一项规则'); }
 }
 
-// ── AI 对话（Anthropic API）─────────────────────────────────────────────────
+// ── AI 对话（DeepSeek API）────────────────────────────────────────────────
 let aiHistory = [];
 
 function buildContext(type) {
@@ -1569,11 +1571,11 @@ async function askAI() {
 }
 
 async function sendToAI(userMsg) {
-  if (ANTHROPIC_API_KEY === 'YOUR_API_KEY_HERE') {
+  if (DEEPSEEK_API_KEY === 'YOUR_API_KEY_HERE') {
     document.getElementById('ai-section').style.display = 'block';
     document.getElementById('ai-output').textContent =
-      '⚠️ 请先在代码顶部替换 ANTHROPIC_API_KEY 为你的真实 API Key。\n\n' +
-      '获取地址：https://console.anthropic.com/settings/keys';
+      '⚠️ 请先在代码顶部替换 DEEPSEEK_API_KEY 为你的真实 API Key。\n\n' +
+      '获取地址：https://platform.deepseek.com/api_keys';
     return;
   }
 
@@ -1585,19 +1587,19 @@ async function sendToAI(userMsg) {
   loadingEl.style.display = 'block';
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type':         'application/json',
-        'x-api-key':            ANTHROPIC_API_KEY,
-        'anthropic-version':    '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model:      MODEL,
+        model:      AI_MODEL,
         max_tokens: 1200,
-        system:     '你是一位专业的基金投资顾问，擅长A股公募基金和ETF指数基金。请用简洁专业的中文回答，给出具体可操作的建议。',
-        messages:   aiHistory,
+        messages:   [
+          { role:'system', content:'你是一位专业的基金投资顾问，擅长A股公募基金和ETF指数基金。请用简洁专业的中文回答，给出具体可操作的建议。' },
+          ...aiHistory,
+        ],
       }),
     });
 
@@ -1607,7 +1609,7 @@ async function sendToAI(userMsg) {
     }
 
     const data = await resp.json();
-    const reply = data.content.filter(b => b.type==='text').map(b => b.text).join('');
+    const reply = data.choices[0].message.content;
     aiHistory.push({ role:'assistant', content: reply });
 
     loadingEl.style.display = 'none';
@@ -1671,7 +1673,7 @@ function processOcrFile(file) {
   reader.onload = ev => {
     const dataUrl = ev.target.result;
     ocrImageBase64 = dataUrl.split(',')[1];
-    // normalise mime: treat heic/heif as jpeg for API (Claude accepts it)
+    // normalise mime: treat heic/heif as jpeg for API
     ocrImageMime = (file.type && file.type !== 'application/octet-stream')
       ? file.type.replace('heif','jpeg').replace('heic','jpeg')
       : 'image/jpeg';
@@ -1706,67 +1708,99 @@ function clearOcrFile() {
 
 async function runOcrAnalysis() {
   if (!ocrImageBase64) { showToast('请先选择截图'); return; }
-  if (ANTHROPIC_API_KEY === 'YOUR_API_KEY_HERE') {
-    showToast('请先填写 API Key'); return;
+  if (SILICONFLOW_API_KEY === 'YOUR_SILICONFLOW_KEY') {
+    showToast('请先填写 SiliconFlow API Key（https://cloud.siliconflow.cn/account/ak）'); return;
   }
-  document.getElementById('ocr-loading').style.display = '';
-  document.getElementById('ocr-result-wrap').style.display = 'none';
-  document.getElementById('ocr-analyze-btn').disabled = true;
-
-  const prompt = `这是一张基金持仓截图（来自手机App，如支付宝/天天基金/招商银行/华夏基金等）。
-请识别图中所有基金持仓信息，以JSON数组返回，每个基金一个对象，字段如下：
-- code: 基金代码（6位数字，如没有则留空字符串）
-- name: 基金名称（完整名称）
-- nav: 当前净值或单位净值（数字，如没有则为null）
-- shares: 持有份额（数字，如没有则为null）
-- marketValue: 当前市值/持有金额（数字，如没有则为null）
-- returnRate: 累计收益率或持有收益率（百分比数字，如+12.5，如没有则为null）
-- type: 基金类型，从以下选一个："A股公募"/"ETF指数"/"QDII"/"债券基金"（根据名称判断）
-
-只返回JSON数组，不要任何解释文字，不要markdown代码块符号。
-如果图中没有基金信息，返回空数组 []。`;
+  const loader = document.getElementById('ocr-loading');
+  const resultWrap = document.getElementById('ocr-result-wrap');
+  const btn = document.getElementById('ocr-analyze-btn');
+  loader.style.display = '';
+  resultWrap.style.display = 'none';
+  btn.disabled = true;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    // 第一步：DeepSeek-OCR 提取图片中的文字
+     document.getElementById('ocr-progress-text').textContent = '正在识别图片文字...';
+    const ocrResp = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
+        'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
       },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1500,
+        model: OCR_MODEL,
+        max_tokens: 4096,
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: ocrImageMime, data: ocrImageBase64 } },
-            { type: 'text', text: prompt }
+            { type: 'image_url', image_url: { url: `data:${ocrImageMime};base64,${ocrImageBase64}` } },
+            { type: 'text', text: '<image>\n<|grounding|>OCR this image.' }
           ]
         }]
       })
     });
-    if (!resp.ok) {
-      const err = await resp.json().catch(()=>({}));
-      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+
+    if (!ocrResp.ok) {
+      const err = await ocrResp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `OCR HTTP ${ocrResp.status}`);
     }
-    const data = await resp.json();
-    const raw  = data.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-    // strip possible markdown fences
-    const clean = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+
+    const ocrData = await ocrResp.json();
+    const ocrText = ocrData.choices[0].message.content.trim();
+    if (!ocrText) throw new Error('图片中未识别到文字');
+
+    // 第二步：DeepSeek AI 将 OCR 文字解析为 JSON
+     document.getElementById('ocr-progress-text').textContent = '正在解析基金数据...';
+    const parseResp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: 2048,
+        messages: [{
+          role: 'user',
+          content: `从以下OCR识别结果中提取所有基金持仓信息，以JSON数组返回。每个基金一个对象：
+{
+  "code": "基金代码（6位数字，没有则空字符串）",
+  "name": "基金名称",
+  "nav": 当前净值（数字，没有则为null）,
+  "shares": 持有份额（数字，没有则为null）,
+  "marketValue": 当前市值（数字，没有则为null）,
+  "returnRate": 累计收益率（如+12.5，没有则为null）,
+  "type": 类型，从"A股公募"/"ETF指数"/"QDII"/"债券基金"中选
+}
+
+OCR 识别结果：
+${ocrText}
+
+只返回JSON数组，不要任何解释文字和markdown代码块符号。`
+        }]
+      })
+    });
+
+    if (!parseResp.ok) {
+      const err = await parseResp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `解析 HTTP ${parseResp.status}`);
+    }
+
+    const parseData = await parseResp.json();
+    const raw = parseData.choices[0].message.content.trim();
+    const clean = raw.replace(/```json\s*|```\s*/g, '').trim();
     let funds;
-    try { funds = JSON.parse(clean); } catch { throw new Error('识别结果格式异常，请重试'); }
+    try { funds = JSON.parse(clean); } catch { throw new Error('解析失败，请重试'); }
 
     ocrParsedFunds = Array.isArray(funds) ? funds : [];
     renderOcrCards(ocrParsedFunds);
   } catch(e) {
-    document.getElementById('ocr-loading').style.display = 'none';
-    document.getElementById('ocr-result-wrap').style.display = '';
+    loader.style.display = 'none';
+    resultWrap.style.display = '';
     document.getElementById('ocr-cards').innerHTML =
       `<p style="font-size:13px;color:var(--color-text-danger);padding:8px 0;">识别失败：${e.message}</p>`;
   } finally {
-    document.getElementById('ocr-analyze-btn').disabled = false;
+    btn.disabled = false;
   }
 }
 
