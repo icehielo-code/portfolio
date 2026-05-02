@@ -254,7 +254,14 @@
       <h1>基金管理仪表板</h1>
       <p id="today-date"></p>
     </div>
-    <button class="btn btn-primary" onclick="openAI()">获取今日AI建议</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn" onclick="exportDataToFile()" style="font-size:12px;padding:6px 12px;">导出数据</button>
+      <label class="btn" style="font-size:12px;padding:6px 12px;cursor:pointer;">
+        导入数据
+        <input type="file" accept=".json" onchange="importDataFromFile(this.files[0]);this.value=''" style="display:none;">
+      </label>
+      <button class="btn btn-primary" onclick="openAI()">获取今日AI建议</button>
+    </div>
   </div>
 
   <!-- Tabs -->
@@ -451,8 +458,8 @@
             </div>
 
             <div class="form-item">
-              <label>买入时净值（原始本金基准）</label>
-              <input id="inp-origin-nav" type="number" placeholder="如 3.120" step="0.001" min="0" />
+              <label>持有收益（元）</label>
+              <input id="inp-origin-nav" type="number" placeholder="如 500.00" step="0.01" min="0" />
             </div>
             <div class="form-item">
               <label>持有份额</label>
@@ -622,31 +629,80 @@ const MODEL = 'claude-sonnet-4-20250514';
 
 const COLORS = ['#378ADD','#1D9E75','#E24B4A','#BA7517','#7F77DD','#D4537E','#0F6E56'];
 
-// ── 状态（本地存储持久化）─────────────────────────────────────────────────
+// ── 状态（本地存储持久化 + 外部数据文件）─────────────────────────────────────
 function loadState() {
   try { return JSON.parse(localStorage.getItem('fund_state')) || null; } catch { return null; }
 }
 function saveState() { localStorage.setItem('fund_state', JSON.stringify(state)); }
 
-let state = loadState() || {
+const DEFAULT_STATE = {
   activeStrategy: 0,
-  originMode: false,   // true = 回到原始本金；false = 阶段模式（用最近节点）
-  // checkpoints: 每次初始化节点
-  // { id, label, date, navs: [nav_per_fund_by_order] }
-  // 第一条永远是"原始买入"节点（originNavs），由用户在添加基金时自动写入
+  originMode: false,
   checkpoints: [],
-  funds: [
-    { code:'000300', name:'华泰柏瑞沪深300ETF', type:'ETF指数',  nav:4.215, shares:5000, target:35, originNav:3.120 },
-    { code:'110020', name:'易方达中证500',       type:'A股公募', nav:2.087, shares:8000, target:25, originNav:1.650 },
-    { code:'161725', name:'招商中证白酒',         type:'A股公募', nav:1.534, shares:6000, target:20, originNav:1.200 },
-    { code:'006479', name:'工银全球精选QDII',     type:'QDII',   nav:3.212, shares:3000, target:20, originNav:2.800 },
-  ],
+  funds: [],
   strategies: [
     { name:'均衡策略',  desc:'平衡风险与收益，定期再平衡，适合长期持有',         rules:['止盈15%','止损8%','季度再平衡','沪深300+中证500'] },
     { name:'定投策略',  desc:'每周/月定期定额投入，摊薄成本，适合长期积累',       rules:['每周五定投','单次¥500','下跌加倍','不做择时'] },
     { name:'趋势策略',  desc:'跟随市场趋势，上涨加仓下跌减仓，适合有经验的投资者', rules:['MA20上方持仓','MA20下方空仓','止损5%','月度调仓'] },
   ]
 };
+
+let state = null;
+
+async function initState() {
+  const localState = loadState();
+  if (localState && localState.funds && localState.funds.length > 0) {
+    state = localState;
+  } else {
+    try {
+      const resp = await fetch('data/funds.json?t=' + Date.now());
+      if (resp.ok) {
+        state = await resp.json();
+        saveState();
+        console.log('已从 data/funds.json 加载持仓数据');
+      } else {
+        state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        console.log('数据文件不存在，使用默认配置');
+      }
+    } catch (e) {
+      state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      console.log('加载数据文件失败，使用默认配置:', e.message);
+    }
+  }
+}
+
+function exportDataToFile() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'funds_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('数据已导出');
+}
+
+function importDataFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.funds || !Array.isArray(data.funds)) {
+        showToast('数据格式错误：缺少 funds 数组');
+        return;
+      }
+      state = data;
+      saveState();
+      renderAll();
+      showToast('数据导入成功，共 ' + state.funds.length + ' 支基金');
+    } catch (err) {
+      showToast('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
 
 // ── 工具函数 ────────────────────────────────────────────────────────────────
 const fmtMoney = n => '¥' + n.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -975,12 +1031,93 @@ function fetchFundInfoEdit(code, forceRefresh) {
     statusEl.innerHTML = `<span style="color:var(--color-text-success);">✓ ${data.name} · 净值已更新</span>`;
   };
 
-  script.src = `https://fundgz.1234567.com.cn/js/${code}.js?callback=${cbName}&rt=${Date.now()}`;
-  script.onerror = () => {
-    if (settled) return; settled = true; clearTimeout(timeout); cleanup();
-    statusEl.innerHTML = '<span style="color:var(--color-text-danger);">✗ 接口无响应，请手动填写</span>';
+  // 多平台基金查询备选方案（与fetchFundInfo保持一致）
+  const fundApis = [
+    {
+      name: '天天基金',
+      url: `https://fundgz.1234567.com.cn/js/${code}.js?callback=${cbName}&rt=${Date.now()}`,
+      type: 'jsonp'
+    },
+    {
+      name: '新浪财经', 
+      url: `https://hq.sinajs.cn/list=f_${code}`,
+      type: 'jsonp',
+      callback: 'var hq_str_f_' + code
+    },
+    {
+      name: '腾讯财经',
+      url: `https://qt.gtimg.cn/q=ff_${code}`,
+      type: 'jsonp',
+      callback: 'v_ff_' + code
+    }
+  ];
+  
+  let currentApiIndex = 0;
+  
+  const tryNextApi = () => {
+    if (currentApiIndex >= fundApis.length) {
+      if (settled) return; settled = true; clearTimeout(timeout); cleanup();
+      statusEl.innerHTML = '<span style="color:var(--color-text-danger);">✗ 所有接口均失败，请手动填写</span>';
+      return;
+    }
+    
+    const api = fundApis[currentApiIndex];
+    currentApiIndex++;
+    
+    console.log(`尝试 ${api.name} 接口: ${api.url}`);
+    
+    if (api.type === 'jsonp') {
+      script.src = api.url;
+      script.onerror = () => {
+        console.log(`${api.name} 接口失败，尝试下一个`);
+        tryNextApi();
+      };
+      document.head.appendChild(script);
+    }
   };
-  document.head.appendChild(script);
+  
+  // 重写回调函数，支持多平台数据解析
+  const originalCallback = window[cbName];
+  window[cbName] = (data) => {
+    if (settled) return;
+    
+    let fundData = null;
+    let apiName = '天天基金';
+    
+    if (data && typeof data === 'object' && data.name) {
+      fundData = data;
+      apiName = '天天基金';
+    } else if (typeof data === 'string') {
+      fundData = parseOtherPlatformData(data, code);
+      apiName = fundApis[currentApiIndex-1]?.name || '财经平台';
+    }
+    
+    if (fundData && fundData.name) {
+      settled = true; clearTimeout(timeout); cleanup();
+      
+      // 只回填名称（如果当前为空）和净值（始终更新）
+      const nameEl = document.getElementById('edit-name');
+      if (!nameEl.value) nameEl.value = fundData.name;
+
+      const navVal = fundData.nav || fundData.gsz || fundData.dwjz;
+      if (navVal) document.getElementById('edit-nav').value = parseFloat(navVal).toFixed(4);
+
+      if (data.gsz && parseFloat(data.gsz) > 0) {
+        const chg = parseFloat(data.gszzl || 0);
+        hintEl.innerHTML = `估算净值 ${data.gsz}（${chg>=0?'+':''}${chg}%）&nbsp;·&nbsp; 上一日结算 ${data.dwjz}（${data.jzrq}）`;
+        hintEl.style.color = chg >= 0 ? '#e24b4a' : '#1d9e75';
+      } else {
+        hintEl.textContent = `最新净值 ${navVal}`;
+        hintEl.style.color = 'var(--color-text-secondary)';
+      }
+      statusEl.innerHTML = `<span style="color:var(--color-text-success);">✓ ${fundData.name} · 来自${apiName}</span>`;
+    } else {
+      console.log(`${apiName} 接口数据解析失败，尝试下一个`);
+      tryNextApi();
+    }
+  };
+  
+  tryNextApi();
 }
 
 function renderRebalList() {
@@ -1088,6 +1225,41 @@ function onToggleOrigin(checked) {
   state.originMode = checked;
   saveState(); renderAll();
   showToast(checked ? '已切换：原始总收益模式' : '已切换：阶段收益模式');
+}
+
+// 解析新浪财经、腾讯财经等平台的数据格式
+function parseOtherPlatformData(data, code) {
+  if (!data) return null;
+  
+  // 新浪财经格式：var hq_str_f_000300="华泰柏瑞沪深300ETF,1.2345,1.2345,...";
+  if (data.includes('var hq_str_f_')) {
+    const match = data.match(/"([^"]+)"/);
+    if (match) {
+      const parts = match[1].split(',');
+      if (parts.length > 0) {
+        return {
+          name: parts[0],
+          nav: parts[1] || parts[2] || ''
+        };
+      }
+    }
+  }
+  
+  // 腾讯财经格式：v_ff_000300="华泰柏瑞沪深300ETF~1.2345~...";
+  if (data.includes('v_ff_')) {
+    const match = data.match(/"([^"]+)"/);
+    if (match) {
+      const parts = match[1].split('~');
+      if (parts.length > 0) {
+        return {
+          name: parts[0],
+          nav: parts[1] || parts[2] || ''
+        };
+      }
+    }
+  }
+  
+  return null;
 }
 
 // ── 天天基金代码自动查询（JSONP）────────────────────────────────────────────
@@ -1211,16 +1383,106 @@ function fetchFundInfo(code) {
     setLookupStatus('ok', `${data.name} · 净值已回填`);
   };
 
-  script.src = `https://fundgz.1234567.com.cn/js/${code}.js?callback=${cbName}&rt=${Date.now()}`;
-  script.onerror = () => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timeout);
-    cleanup();
-    // 接口挂了，降级到东方财富静态详情页
-    setLookupStatus('err', '天天基金接口无响应，请手动填写或稍后重试');
+  // 多平台基金查询备选方案
+  const fundApis = [
+    {
+      name: '天天基金',
+      url: `https://fundgz.1234567.com.cn/js/${code}.js?callback=${cbName}&rt=${Date.now()}`,
+      type: 'jsonp'
+    },
+    {
+      name: '新浪财经', 
+      url: `https://hq.sinajs.cn/list=f_${code}`,
+      type: 'jsonp',
+      callback: 'var hq_str_f_' + code
+    },
+    {
+      name: '腾讯财经',
+      url: `https://qt.gtimg.cn/q=ff_${code}`,
+      type: 'jsonp',
+      callback: 'v_ff_' + code
+    }
+  ];
+  
+  let currentApiIndex = 0;
+  
+  const tryNextApi = () => {
+    if (currentApiIndex >= fundApis.length) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      cleanup();
+      setLookupStatus('err', '所有接口均失败，请手动填写基金信息');
+      return;
+    }
+    
+    const api = fundApis[currentApiIndex];
+    currentApiIndex++;
+    
+    console.log(`尝试 ${api.name} 接口: ${api.url}`);
+    
+    if (api.type === 'jsonp') {
+      // JSONP方式调用
+      script.src = api.url;
+      script.onerror = () => {
+        console.log(`${api.name} 接口失败，尝试下一个`);
+        tryNextApi();
+      };
+      document.head.appendChild(script);
+    }
   };
-  document.head.appendChild(script);
+  
+  // 重写回调函数，支持多平台数据解析
+  const originalCallback = window[cbName];
+  window[cbName] = (data) => {
+    if (settled) return;
+    
+    let fundData = null;
+    let apiName = '天天基金';
+    
+    // 解析不同平台的数据格式
+    if (data && typeof data === 'object' && data.name) {
+      // 天天基金格式
+      fundData = data;
+      apiName = '天天基金';
+    } else if (typeof data === 'string') {
+      // 新浪财经或腾讯财经格式
+      fundData = parseOtherPlatformData(data, code);
+      apiName = fundApis[currentApiIndex-1]?.name || '财经平台';
+    }
+    
+    if (fundData && fundData.name) {
+      settled = true;
+      clearTimeout(timeout);
+      cleanup();
+      
+      // 回填基金名称
+      const nameEl = document.getElementById('inp-name');
+      nameEl.value = fundData.name;
+      document.getElementById('inp-name-tag').style.display = '';
+      
+      // 回填净值
+      if (fundData.nav) {
+        document.getElementById('inp-nav').value = parseFloat(fundData.nav).toFixed(4);
+        const hintEl = document.getElementById('inp-nav-hint');
+        hintEl.textContent = `最新净值：${fundData.nav}`;
+        hintEl.style.color = 'var(--color-text-secondary)';
+      }
+      
+      // 自动聚焦到份额输入框
+      const sharesEl = document.getElementById('inp-shares');
+      if (sharesEl && !sharesEl.value) sharesEl.focus();
+      
+      setLookupStatus('ok', `${fundData.name} · 来自${apiName}`);
+    } else {
+      // 当前接口解析失败，尝试下一个
+      console.log(`${apiName} 接口数据解析失败，尝试下一个`);
+      tryNextApi();
+    }
+  };
+  
+  // 开始尝试第一个API
+  tryNextApi();
 }
 
 function addFund() {
@@ -1609,7 +1871,7 @@ function addAllOcrFunds() {
 }
 
 // ── 初始化 ───────────────────────────────────────────────────────────────────
-renderAll();
+initState().then(() => renderAll());
 </script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+{
+  "activeStrategy": 0,
+  "originMode": false,
+  "checkpoints": [],
+  "funds": [
+    { "code": "", "name": "", "type": "A股公募", "nav": 0, "shares": 0, "target": 0, "originNav": 0 }
+  ],
+  "strategies": [
+    { "name": "均衡策略", "desc": "平衡风险与收益，定期再平衡，适合长期持有", "rules": ["止盈15%", "止损8%", "季度再平衡"] },
+    { "name": "定投策略", "desc": "每周/月定期定额投入，摊薄成本，适合长期积累", "rules": ["每周五定投", "单次¥500", "下跌加倍"] },
+    { "name": "趋势策略", "desc": "跟随市场趋势，上涨加仓下跌减仓，适合有经验的投资者", "rules": ["MA20上方持仓", "MA20下方空仓", "止损5%"] }
+  ]
+}
