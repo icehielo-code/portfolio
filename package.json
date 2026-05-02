@@ -1,0 +1,29 @@
+{
+  "name": "fund-dashboard",
+  "version": "1.0.0",
+  "description": "基金投资组合仪表板应用",
+  "main": "fund_dashboard.html",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "dev": "python3 -m http.server 8080",
+    "version": "npm version",
+    "release": "npm version patch && git push --follow-tags"
+  },
+  "keywords": [
+    "fund",
+    "dashboard",
+    "portfolio",
+    "investment",
+    "finance"
+  ],
+  "author": "icehielo-code",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/icehielo-code/portfolio.git"
+  },
+  "homepage": "https://github.com/icehielo-code/portfolio#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
