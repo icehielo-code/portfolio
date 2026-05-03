@@ -118,3 +118,13 @@ __pycache__/
 
 # Fund data (user-specific, should not be versioned)
 data/funds.json
+
+# SQLite database
+*.db
+*.sqlite
+
+# Client build output
+client/dist
+
+# Server uploads
+uploads/

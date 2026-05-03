@@ -1,29 +1,23 @@
 {
   "name": "fund-dashboard",
-  "version": "1.0.1",
-  "description": "基金投资组合仪表板应用",
-  "main": "fund_dashboard.html",
+  "version": "2.0.0",
+  "private": true,
   "scripts": {
-    "start": "python3 -m http.server 8080",
-    "dev": "python3 -m http.server 8080",
-    "version": "npm version",
-    "release": "npm version patch && git push --follow-tags"
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node server/index.js",
+    "dev:client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "NODE_ENV=production node server/index.js"
   },
-  "keywords": [
-    "fund",
-    "dashboard",
-    "portfolio",
-    "investment",
-    "finance"
-  ],
-  "author": "icehielo-code",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/icehielo-code/portfolio.git"
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0"
   },
-  "homepage": "https://github.com/icehielo-code/portfolio#readme",
-  "engines": {
-    "node": ">=14.0.0"
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }
