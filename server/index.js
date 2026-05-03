@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ override: true });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -14,6 +14,7 @@ const fundsRouter = require('./routes/funds');
 const strategiesRouter = require('./routes/strategies');
 const checkpointsRouter = require('./routes/checkpoints');
 const settingsRouter = require('./routes/settings');
+const paramsRouter = require('./routes/params');
 const proxyRouter = require('./routes/proxy');
 const aiRouter = require('./routes/ai');
 
@@ -21,6 +22,7 @@ app.use('/api/funds', fundsRouter);
 app.use('/api/strategies', strategiesRouter);
 app.use('/api/checkpoints', checkpointsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/params', paramsRouter);
 app.use('/api/proxy', proxyRouter);
 app.use('/api/ai', aiRouter);
 

@@ -61,6 +61,12 @@ db.exec(`
     content     TEXT    NOT NULL,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS params (
+    key         TEXT    PRIMARY KEY,
+    value       TEXT    NOT NULL DEFAULT '',
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+  );
 `);
 
 const strategyCount = db.prepare('SELECT COUNT(*) as cnt FROM strategies').get();
@@ -76,6 +82,15 @@ if (strategyCount.cnt === 0) {
 const originModeSetting = db.prepare("SELECT COUNT(*) as cnt FROM settings WHERE key = 'origin_mode'").get();
 if (originModeSetting.cnt === 0) {
   db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('origin_mode', 'false');
+}
+
+const paramsCount = db.prepare('SELECT COUNT(*) as cnt FROM params').get();
+if (paramsCount.cnt === 0) {
+  const insertParam = db.prepare('INSERT INTO params (key, value) VALUES (?, ?)');
+  insertParam.run('DEEPSEEK_API_KEY', process.env.DEEPSEEK_API_KEY || '');
+  insertParam.run('SILICONFLOW_API_KEY', process.env.SILICONFLOW_API_KEY || '');
+  insertParam.run('AI_MODEL', process.env.AI_MODEL || 'deepseek-chat');
+  insertParam.run('OCR_MODEL', process.env.OCR_MODEL || 'deepseek-ai/DeepSeek-OCR');
 }
 
 module.exports = db;

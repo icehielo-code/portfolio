@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const fetch = require('node-fetch');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -14,10 +13,9 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const SILICONFLOW_API_KEY = process.env.SILICONFLOW_API_KEY;
-const AI_MODEL = process.env.AI_MODEL || 'deepseek-chat';
-const OCR_MODEL = process.env.OCR_MODEL || 'deepseek-ai/DeepSeek-OCR';
+function getParam(key) {
+  return db.prepare('SELECT value FROM params WHERE key = ?').get(key)?.value || '';
+}
 
 function buildContext(type) {
   const funds = db.prepare('SELECT * FROM funds ORDER BY sort_order, id').all();
@@ -52,7 +50,8 @@ router.post('/chat', async (req, res) => {
   const { message, type } = req.body;
   if (!message && !type) return res.status(400).json({ error: '消息不能为空' });
 
-  if (!DEEPSEEK_API_KEY) {
+  const deepseekKey = getParam('DEEPSEEK_API_KEY');
+  if (!deepseekKey) {
     return res.status(500).json({ error: '未配置 DEEPSEEK_API_KEY' });
   }
 
@@ -67,10 +66,10 @@ router.post('/chat', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${deepseekKey}`,
       },
       body: JSON.stringify({
-        model: AI_MODEL,
+        model: getParam('AI_MODEL') || 'deepseek-chat',
         max_tokens: 1200,
         messages: [
           { role: 'system', content: '你是一位专业的基金投资顾问，擅长A股公募基金和ETF指数基金。请用简洁专业的中文回答，给出具体可操作的建议。' },
@@ -98,8 +97,11 @@ router.post('/chat', async (req, res) => {
 
 router.post('/ocr', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '请上传图片' });
-  if (!SILICONFLOW_API_KEY) return res.status(500).json({ error: '未配置 SILICONFLOW_API_KEY' });
-  if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: '未配置 DEEPSEEK_API_KEY' });
+
+  const siliconKey = getParam('SILICONFLOW_API_KEY');
+  const deepseekKey = getParam('DEEPSEEK_API_KEY');
+  if (!siliconKey) return res.status(500).json({ error: '未配置 SILICONFLOW_API_KEY' });
+  if (!deepseekKey) return res.status(500).json({ error: '未配置 DEEPSEEK_API_KEY' });
 
   try {
     const imageBuffer = fs.readFileSync(req.file.path);
@@ -112,10 +114,10 @@ router.post('/ocr', upload.single('image'), async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
+        'Authorization': `Bearer ${siliconKey}`,
       },
       body: JSON.stringify({
-        model: OCR_MODEL,
+        model: getParam('OCR_MODEL') || 'deepseek-ai/DeepSeek-OCR',
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -129,7 +131,7 @@ router.post('/ocr', upload.single('image'), async (req, res) => {
 
     if (!ocrResp.ok) {
       const err = await ocrResp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `OCR HTTP ${ocrResp.status}`);
+      throw new Error('[图片识别] ' + (err.error?.message || `HTTP ${ocrResp.status}`));
     }
 
     const ocrData = await ocrResp.json();
@@ -140,10 +142,10 @@ router.post('/ocr', upload.single('image'), async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${deepseekKey}`,
       },
       body: JSON.stringify({
-        model: AI_MODEL,
+        model: getParam('AI_MODEL') || 'deepseek-chat',
         max_tokens: 2048,
         messages: [{
           role: 'user',
@@ -168,7 +170,7 @@ ${ocrText}
 
     if (!parseResp.ok) {
       const err = await parseResp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `解析 HTTP ${parseResp.status}`);
+      throw new Error('[AI解析] ' + (err.error?.message || `HTTP ${parseResp.status}`));
     }
 
     const parseData = await parseResp.json();
@@ -179,9 +181,12 @@ ${ocrText}
 
     res.json({ funds: Array.isArray(funds) ? funds : [], ocrText });
   } catch (e) {
+    console.error('[OCR] Error:', e.message);
     res.status(500).json({ error: e.message });
   } finally {
-    try { fs.unlinkSync(req.file.path); } catch {}
+    if (req.file && req.file.path) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
   }
 });
 

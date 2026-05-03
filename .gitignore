@@ -121,6 +121,8 @@ data/funds.json
 
 # SQLite database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 
 # Client build output

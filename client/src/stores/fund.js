@@ -12,6 +12,17 @@ export const useFundStore = defineStore('fund', () => {
 
   const totalValue = computed(() => funds.value.reduce((s, f) => s + f.nav * f.shares, 0))
 
+  const latestCheckpoint = computed(() => {
+    return checkpoints.value.length ? checkpoints.value[0] : null
+  })
+
+  function getCheckpointNav(code) {
+    const cp = latestCheckpoint.value
+    if (!cp) return null
+    const snapshot = (cp.nav_snapshots || []).find(s => s.code === code)
+    return snapshot ? snapshot.nav : null
+  }
+
   const activeStrategy = computed(() => {
     return strategies.value.find(s => s.id === activeStrategyId.value) || strategies.value.find(s => s.is_active) || null
   })
@@ -117,7 +128,7 @@ export const useFundStore = defineStore('fund', () => {
 
   return {
     funds, strategies, checkpoints, originMode, activeStrategyId, loading,
-    totalValue, activeStrategy,
+    totalValue, latestCheckpoint, getCheckpointNav, activeStrategy,
     loadAll, addFund, updateFund, removeFund, refreshAllNAVs,
     addStrategy, updateStrategy, removeStrategy, activateStrategy,
     addCheckpoint, removeCheckpoint, toggleOriginMode,

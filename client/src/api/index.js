@@ -32,11 +32,14 @@ export const settingsApi = {
 export const proxyApi = {
   queryFund: (code) => http.get('/proxy', { params: { code } }).then(r => r.data),
   batchQuery: (codes) => http.post('/proxy/batch', { codes }).then(r => r.data),
+  fundDetail: (code) => http.get('/proxy/fund-detail', { params: { code } }).then(r => r.data),
+  batchFundDetail: (codes) => http.post('/proxy/batch-fund-detail', { codes }).then(r => r.data),
+  stockQuotes: (secids) => http.get('/proxy/stock-quotes', { params: { secids } }).then(r => r.data),
 }
 
 export const aiApi = {
   chat: (message, type) => http.post('/ai/chat', { message, type }).then(r => r.data),
-  ocr: (formData) => http.post('/ai/ocr', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
+  ocr: (formData) => http.post('/ai/ocr', formData).then(r => r.data),
   history: (limit) => http.get('/ai/history', { params: { limit } }).then(r => r.data),
   clearHistory: () => http.delete('/ai/history').then(r => r.data),
 }

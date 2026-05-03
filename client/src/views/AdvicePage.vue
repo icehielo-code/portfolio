@@ -33,9 +33,9 @@
 
     <div class="card" style="margin-top:1rem;">
       <div class="section-title">OCR 识别（截图导入持仓）</div>
-      <div style="border:2px dashed var(--color-border-md);border-radius:var(--radius-md);padding:2rem;text-align:center;cursor:pointer;transition:all .2s;"
+      <div class="ocr-dropzone"
            @dragover.prevent="dzOver = true" @dragleave="dzOver = false" @drop.prevent="onDrop" @click="pickFile"
-           :style="{ background: dzOver ? 'var(--color-bg-secondary)' : '', borderColor: dzOver ? '#378add' : '' }">
+           :class="{ 'ocr-dropzone-over': dzOver }">
         <p style="font-size:13px;color:var(--color-text-secondary);">拖拽截图到此处，或点击选择文件</p>
         <input type="file" ref="fileInput" accept="image/*" @change="onFilePick" style="display:none;" />
       </div>

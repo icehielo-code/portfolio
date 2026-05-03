@@ -185,6 +185,16 @@ body {
 .cp-del { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-md); border: 0.5px solid var(--color-border); background: none; cursor: pointer; color: var(--color-text-secondary); font-family: var(--font); }
 .cp-del:hover { background: var(--color-bg-danger); color: var(--color-text-danger); border-color: transparent; }
 
+.cp-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cp-snap-count { font-size: 11px; color: var(--color-text-secondary); }
+.cp-fund-order { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 10px; background: var(--color-bg-secondary); border-radius: var(--radius-md); font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.cp-fund-ref { white-space: nowrap; }
+
+.phase-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.phase-tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--color-bg-secondary); white-space: nowrap; }
+.phase-tag::before { content: "→"; margin-right: 3px; color: var(--color-text-secondary); }
+.phase-tag:first-child::before { content: ""; margin-right: 0; }
+
 .mode-banner { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-md); font-size: 12px; margin-bottom: 1rem; }
 .mode-banner.mode-origin { background: var(--color-bg-success); color: var(--color-text-success); border: 0.5px solid #97c459; }
 .mode-banner.mode-stage { background: var(--color-bg-info); color: var(--color-text-info); border: 0.5px solid #85b7eb; }
@@ -197,6 +207,8 @@ body {
 .modal input, .modal select { width: 100%; padding: 8px 10px; font-size: 13px; border: 0.5px solid var(--color-border-md); border-radius: var(--radius-md); background: var(--color-bg-primary); color: var(--color-text-primary); font-family: var(--font); outline: none; }
 .modal input:focus, .modal select:focus { border-color: #378add; box-shadow: 0 0 0 2px rgba(55,138,221,.15); }
 
+.ocr-dropzone { border: 2px dashed var(--color-border-md); border-radius: var(--radius-md); padding: 2rem; text-align: center; cursor: pointer; transition: all .2s; }
+.ocr-dropzone-over { background: var(--color-bg-secondary); border-color: #378add; }
 .ocr-card { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; }
 .ocr-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .ocr-card-name { font-size: 13px; font-weight: 500; }

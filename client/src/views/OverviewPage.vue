@@ -2,11 +2,47 @@
   <div>
     <div class="mode-banner" :class="store.originMode ? 'mode-origin' : 'mode-stage'">
       <span class="mode-dot"></span>
-      {{ store.originMode ? '成本基准模式 — 收益按成本净值计算' : '阶段基准模式 — 收益按检查点净值计算' }}
+      {{ store.originMode ? '原始总收益模式 — 收益按买入时净值计算' : '阶段模式 — 收益按最新检查点净值计算' }}
       <label class="toggle" style="margin-left:auto;">
         <input type="checkbox" :checked="store.originMode" @change="store.toggleOriginMode($event.target.checked)" />
         <span class="toggle-track"></span>
       </label>
+    </div>
+
+    <div class="card">
+      <div class="section-title">检查点</div>
+      <div class="cp-add-row">
+        <div class="form-item">
+          <label>名称</label>
+          <input v-model="cpLabel" placeholder="如：季度检查" />
+        </div>
+        <div class="form-item">
+          <label>日期</label>
+          <input v-model="cpDate" type="date" />
+        </div>
+      </div>
+      <div class="form-item" style="margin-bottom:8px;">
+        <label>净值（逗号分隔，顺序对应下方基金，留空自动填充当前净值）</label>
+        <input v-model="cpNavs" placeholder="1.2345, 2.3456, 3.4567" />
+      </div>
+      <div class="cp-fund-order" v-if="store.funds.length">
+        <span class="cp-fund-ref" v-for="(f, i) in store.funds" :key="f.code">{{ i + 1 }}. {{ f.name }} ({{ f.code }})</span>
+      </div>
+      <button class="btn btn-primary" @click="addCheckpoint" style="margin-top:8px;">添加检查点</button>
+
+      <div class="cp-list" v-if="store.checkpoints.length" style="margin-top:12px;">
+        <div v-for="cp in store.checkpoints" :key="cp.id" class="cp-item" :class="{ 'active-cp': cp.id === store.latestCheckpoint?.id }">
+          <span class="cp-dot"></span>
+          <div class="cp-info">
+            <span class="cp-name">{{ cp.label }}</span>
+            <div>
+              <span class="cp-meta">{{ cp.checkpoint_date }}</span>
+              <span class="cp-snap-count"> · {{ cp.nav_snapshots?.length || 0 }} 条记录</span>
+            </div>
+          </div>
+          <button class="cp-del" @click="store.removeCheckpoint(cp.id)">删除</button>
+        </div>
+      </div>
     </div>
 
     <div class="metrics">
@@ -36,8 +72,9 @@
           <tr>
             <th>基金</th>
             <th>净值</th>
+            <th>基准净值</th>
             <th>市值</th>
-            <th>收益</th>
+            <th>阶段盈亏</th>
             <th></th>
           </tr>
         </thead>
@@ -46,13 +83,22 @@
             <td>
               <div class="fund-name">{{ f.name }}</div>
               <div class="fund-code">{{ f.code }}</div>
+              <div v-if="phaseTagsMap.get(f.code)?.length" class="phase-tags">
+                <span v-for="(tag, i) in phaseTagsMap.get(f.code)" :key="i" class="phase-tag" :class="tag.pct >= 0 ? 'up' : 'down'">
+                  {{ tag.label }}:{{ tag.pct >= 0 ? '+' : '' }}{{ tag.pct.toFixed(2) }}%
+                </span>
+              </div>
             </td>
             <td>{{ f.nav?.toFixed(4) }}</td>
+            <td>{{ baseNavForFund(f).toFixed(4) }}</td>
             <td>¥{{ formatNum(f.nav * f.shares) }}</td>
             <td>
-              <span :class="fundPL(f) >= 0 ? 'up' : 'down'">
+              <div :class="fundPL(f) >= 0 ? 'up' : 'down'" style="font-weight:500;">
                 {{ fundPL(f) >= 0 ? '+' : '' }}¥{{ formatNum(Math.abs(fundPL(f))) }}
-              </span>
+              </div>
+              <div class="metric-sub" :class="fundPLRate(f) >= 0 ? 'up' : 'down'">
+                {{ fundPLRate(f) >= 0 ? '+' : '' }}{{ fundPLRate(f).toFixed(2) }}%
+              </div>
             </td>
             <td>
               <button class="btn" style="font-size:11px;padding:3px 8px;" @click="openEdit(f)">编辑</button>
@@ -68,41 +114,16 @@
       <button v-if="store.funds.length" class="btn btn-block" @click="addNewFund" style="margin-top:10px;">+ 添加基金</button>
     </div>
 
-    <div class="two-col">
-      <div class="card">
-        <div class="section-title">再平衡建议</div>
-        <div v-for="f in rebalanceData" :key="f.code" class="rebal-row">
-          <span class="rebal-name">{{ f.name }}</span>
-          <div class="rebal-flex">
-            <div class="alloc-bar-wrap">
-              <div class="alloc-bar" :style="{ width: f.currentPct + '%', background: f.diffColor }"></div>
-            </div>
-          </div>
-          <span class="rebal-action" :class="f.actionClass">{{ f.action }}</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="section-title">检查点</div>
-        <div class="cp-add-row">
-          <div class="form-item">
-            <label>名称</label>
-            <input v-model="cpLabel" placeholder="如：季度检查" />
-          </div>
-          <div class="form-item">
-            <label>日期</label>
-            <input v-model="cpDate" type="date" />
-          </div>
-          <button class="btn btn-primary" @click="addCheckpoint" style="align-self:flex-end;">添加</button>
-        </div>
-        <div class="cp-list">
-          <div v-for="cp in store.checkpoints" :key="cp.id" class="cp-item">
-            <span class="cp-dot"></span>
-            <span class="cp-name">{{ cp.label }}</span>
-            <span class="cp-meta">{{ cp.checkpoint_date }}</span>
-            <button class="cp-del" @click="store.removeCheckpoint(cp.id)">删除</button>
+    <div class="card">
+      <div class="section-title">再平衡建议</div>
+      <div v-for="f in rebalanceData" :key="f.code" class="rebal-row">
+        <span class="rebal-name">{{ f.name }}</span>
+        <div class="rebal-flex">
+          <div class="alloc-bar-wrap">
+            <div class="alloc-bar" :style="{ width: f.currentPct + '%', background: f.diffColor }"></div>
           </div>
         </div>
+        <span class="rebal-action" :class="f.actionClass">{{ f.action }}</span>
       </div>
     </div>
   </div>
@@ -118,10 +139,17 @@ const toast = inject('toast')
 
 const cpLabel = ref('')
 const cpDate = ref(new Date().toISOString().slice(0, 10))
+const cpNavs = ref('')
 
 const totalValue = computed(() => store.totalValue)
 
-const totalCost = computed(() => store.funds.reduce((s, f) => s + f.origin_nav * f.shares, 0))
+function baseNavForFund(f) {
+  if (store.originMode) return f.origin_nav
+  const cpNav = store.getCheckpointNav(f.code)
+  return cpNav !== null ? cpNav : f.origin_nav
+}
+
+const totalCost = computed(() => store.funds.reduce((s, f) => s + baseNavForFund(f) * f.shares, 0))
 
 const totalPL = computed(() => totalValue.value - totalCost.value)
 
@@ -129,8 +157,7 @@ const totalPLRate = computed(() => totalCost.value > 0 ? (totalPL.value / totalC
 
 const todayPL = computed(() => {
   return store.funds.reduce((s, f) => {
-    const baseNav = store.originMode ? f.origin_nav : f.nav
-    return s + (f.nav - baseNav) * f.shares * 0.002
+    return s + (f.nav - baseNavForFund(f)) * f.shares * 0.002
   }, 0)
 })
 
@@ -140,8 +167,8 @@ const maxDrawdown = computed(() => {
   return Math.max(0, maxPL < 0 ? Math.abs(maxPL) : 0)
 })
 
-function fundPL(f) { return (f.nav - f.origin_nav) * f.shares }
-function fundPLRate(f) { return f.origin_nav > 0 ? ((f.nav - f.origin_nav) / f.origin_nav) * 100 : 0 }
+function fundPL(f) { return (f.nav - baseNavForFund(f)) * f.shares }
+function fundPLRate(f) { const base = baseNavForFund(f); return base > 0 ? ((f.nav - base) / base) * 100 : 0 }
 
 const rebalanceData = computed(() => {
   const tv = totalValue.value
@@ -158,6 +185,42 @@ const rebalanceData = computed(() => {
       diff, action, actionClass, diffColor: diff > 0 ? '#e24b4a' : '#1d9e75'
     }
   })
+})
+
+const phaseTagsMap = computed(() => {
+  const map = new Map()
+  const cps = store.checkpoints
+  if (!cps.length) return map
+
+  const chrono = [...cps].reverse()
+  for (const f of store.funds) {
+    const tags = []
+
+    if (f.origin_nav > 0 && chrono.length > 0) {
+      const firstNav = chrono[0].nav_snapshots.find(s => s.code === f.code)?.nav
+      if (firstNav && firstNav > 0) {
+        tags.push({ label: '原始', pct: ((firstNav - f.origin_nav) / f.origin_nav) * 100 })
+      }
+    }
+
+    for (let i = 0; i < chrono.length - 1; i++) {
+      const fromNav = chrono[i].nav_snapshots.find(s => s.code === f.code)?.nav
+      const toNav = chrono[i + 1].nav_snapshots.find(s => s.code === f.code)?.nav
+      if (fromNav && toNav && fromNav > 0) {
+        tags.push({ label: chrono[i + 1].label, pct: ((toNav - fromNav) / fromNav) * 100 })
+      }
+    }
+
+    if (chrono.length > 0) {
+      const lastNav = chrono[chrono.length - 1].nav_snapshots.find(s => s.code === f.code)?.nav
+      if (lastNav && lastNav > 0) {
+        tags.push({ label: '当前', pct: ((f.nav - lastNav) / lastNav) * 100 })
+      }
+    }
+
+    map.set(f.code, tags)
+  }
+  return map
 })
 
 function formatNum(n) {
@@ -178,9 +241,31 @@ async function removeFund(id) {
 
 async function addCheckpoint() {
   if (!cpLabel.value || !cpDate.value) { toast('请填写名称和日期'); return }
-  const snapshots = store.funds.map(f => ({ code: f.code, name: f.name, nav: f.nav }))
-  await store.addCheckpoint({ label: cpLabel.value, checkpoint_date: cpDate.value, nav_snapshots: snapshots })
+
+  const navStrs = cpNavs.value.split(',').map(s => s.trim())
+  const navValues = navStrs.map(s => (s ? parseFloat(s) : NaN))
+
+  for (let i = 0; i < navValues.length; i++) {
+    if (navStrs[i] && isNaN(navValues[i])) {
+      toast(`第 ${i + 1} 个净值格式错误: "${navStrs[i]}"`)
+      return
+    }
+  }
+
+  const snapshots = store.funds.map((f, i) => ({
+    code: f.code,
+    name: f.name,
+    nav: (i < navValues.length && !isNaN(navValues[i])) ? navValues[i] : f.nav,
+  }))
+
+  await store.addCheckpoint({
+    label: cpLabel.value,
+    checkpoint_date: cpDate.value,
+    nav_snapshots: snapshots,
+  })
+
   cpLabel.value = ''
+  cpNavs.value = ''
   toast('检查点已添加')
 }
 </script>

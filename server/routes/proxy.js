@@ -1,11 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const fetch = require('node-fetch');
-const https = require('https');
-const http = require('http');
-
-const httpAgent = new http.Agent({ keepAlive: true });
-const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: true });
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -15,7 +9,6 @@ async function fetchUrl(url, headers = {}, timeout = 8000) {
   try {
     const resp = await fetch(url, {
       headers: { 'User-Agent': UA, ...headers },
-      agent: url.startsWith('https') ? httpsAgent : httpAgent,
       signal: controller.signal,
     });
     return resp;
@@ -95,9 +88,9 @@ async function trySina(code) {
   try {
     const url = `https://hq.sinajs.cn/list=f_${code}`;
     const resp = await fetchUrl(url, { Referer: 'https://finance.sina.com.cn/' });
-    const raw = await resp.buffer();
-    const text = raw.toString('utf-8').replace(/\ufffd/g, '');
-    const textGbk = raw.toString('gbk').replace(/\ufffd/g, '');
+    const ab = await resp.arrayBuffer();
+    const text = Buffer.from(ab).toString('utf-8').replace(/\ufffd/g, '');
+    const textGbk = Buffer.from(ab).toString('gbk').replace(/\ufffd/g, '');
 
     let parsed = null;
     for (const t of [textGbk, text]) {
@@ -161,6 +154,155 @@ router.post('/batch', async (req, res) => {
       } catch {}
     }
     results[code] = { error: '查询失败' };
+  }));
+
+  res.json(results);
+});
+
+async function fetchManager(code) {
+  try {
+    const url = `https://fund.eastmoney.com/pingzhongdata/${code}.js`;
+    const resp = await fetchUrl(url, { Referer: 'https://fund.eastmoney.com/' }, 10000);
+    const raw = await resp.text();
+    const m = raw.match(/var\s+Data_currentFundManager\s*=\s*(\[[\s\S]*?\])\s*;/);
+    if (!m) return [];
+    const arr = JSON.parse(m[1]);
+    return arr.map(mgr => ({
+      id: mgr.id,
+      name: mgr.name,
+      pic: mgr.pic ? `/api/proxy/mgr-img?url=${encodeURIComponent(mgr.pic)}` : '',
+      workTime: mgr.workTime || '',
+      fundSize: mgr.fundSize || '',
+    }));
+  } catch { return []; }
+}
+
+async function fetchHoldings(code) {
+  try {
+    const url = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${code}&topline=10&year=&month=&rt=0.${Date.now()}`;
+    const resp = await fetchUrl(url, { Referer: 'https://fundf10.eastmoney.com/' }, 10000);
+    const raw = await resp.text();
+
+    const dateM = raw.match(/(\d{4}-\d{2}-\d{2})/);
+    const reportDate = dateM ? dateM[1] : '';
+
+    const holdings = [];
+    const trReg = /<tr>([\s\S]*?)<\/tr>/g;
+    let trMatch;
+    while ((trMatch = trReg.exec(raw)) !== null) {
+      const tr = trMatch[1];
+      const nameM = tr.match(/class='(?:toc|tol)'[^>]*><a[^>]*>([^<]+)<\/a>/) || tr.match(/style='line-height:18px'><a[^>]*>([^<]+)<\/a>/);
+      const pctM = tr.match(/class='(?:toc|tor)'>([\d.]+)%<\/td>/);
+      const secidM = tr.match(/quote\.eastmoney\.com\/unify\/r\/(\d+\.\d+)/);
+      if (nameM && pctM) {
+        holdings.push({
+          name: nameM[1].trim(),
+          pct: parseFloat(pctM[1]),
+          secid: secidM ? secidM[1] : '',
+        });
+      }
+    }
+    return { reportDate, holdings };
+  } catch { return { reportDate: '', holdings: [] }; }
+}
+
+async function fetchStockQuotes(secids) {
+  if (!secids.length) return {};
+  try {
+    const codes = secids.map(s => {
+      const [market, code] = s.split('.');
+      if (market === '1') return `sh${code}`;
+      if (market === '0') return `sz${code}`;
+      if (market === '116') return `r_hk${code}`;
+      return `sz${code}`;
+    });
+    const url = `https://qt.gtimg.cn/q=${codes.join(',')}`;
+    const resp = await fetchUrl(url, { Referer: 'https://gu.qq.com/' }, 5000);
+    const raw = await resp.text();
+    const result = {};
+    const lines = raw.split(';').filter(l => l.includes('="'));
+    for (const line of lines) {
+      const eqIdx = line.indexOf('="');
+      if (eqIdx < 0) continue;
+      const key = line.substring(0, eqIdx).replace('v_', '');
+      const val = line.substring(eqIdx + 2).replace(/"$/, '');
+      const parts = val.split('~');
+      if (parts.length < 34) continue;
+      const code = parts[2] || '';
+      const price = parseFloat(parts[3]) || 0;
+      const changeAmt = parseFloat(parts[31]) || 0;
+      const changePct = parseFloat(parts[32]) || 0;
+      if (code) {
+        result[code] = { price, changePct, changeAmt };
+      }
+    }
+    const secidMap = {};
+    for (const s of secids) {
+      const [market, code] = s.split('.');
+      let prefix;
+      if (market === '1') prefix = `sh${code}`;
+      else if (market === '0') prefix = `sz${code}`;
+      else if (market === '116') prefix = `r_hk${code}`;
+      else prefix = `sz${code}`;
+      if (result[code]) secidMap[s] = result[code];
+    }
+    return secidMap;
+  } catch { return {}; }
+}
+
+router.get('/stock-quotes', async (req, res) => {
+  const secids = (req.query.secids || '').split(',').filter(Boolean);
+  if (!secids.length) return res.json({});
+  const quotes = await fetchStockQuotes(secids);
+  res.json(quotes);
+});
+
+router.get('/mgr-img', async (req, res) => {
+  const imgUrl = req.query.url;
+  if (!imgUrl || !/^https?:\/\/pdf\.dfcfw\.com\//.test(imgUrl)) {
+    return res.status(400).send('Invalid URL');
+  }
+  try {
+    const resp = await fetchUrl(imgUrl, { Referer: 'https://fund.eastmoney.com/' }, 5000);
+    const contentType = resp.headers.get('content-type') || 'image/jpeg';
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    const buf = Buffer.from(await resp.arrayBuffer());
+    res.send(buf);
+  } catch {
+    res.status(502).send('Fetch failed');
+  }
+});
+
+router.get('/fund-detail', async (req, res) => {
+  const code = (req.query.code || '').trim();
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: '无效基金代码' });
+  }
+
+  const [managers, holdingsData] = await Promise.all([
+    fetchManager(code),
+    fetchHoldings(code),
+  ]);
+
+  res.json({ code, managers, ...holdingsData });
+});
+
+router.post('/batch-fund-detail', async (req, res) => {
+  const { codes } = req.body;
+  if (!Array.isArray(codes)) return res.status(400).json({ error: '参数格式错误' });
+
+  const results = {};
+  await Promise.all(codes.map(async (code) => {
+    try {
+      const [managers, holdingsData] = await Promise.all([
+        fetchManager(code),
+        fetchHoldings(code),
+      ]);
+      results[code] = { code, managers, ...holdingsData };
+    } catch {
+      results[code] = { code, managers: [], holdings: [], reportDate: '' };
+    }
   }));
 
   res.json(results);

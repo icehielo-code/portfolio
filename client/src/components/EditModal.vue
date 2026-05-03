@@ -44,7 +44,7 @@
 
       <div class="form-grid">
         <div class="form-item">
-          <label>成本净值</label>
+          <label>买入时净值</label>
           <input v-model.number="form.origin_nav" type="number" step="0.0001" />
         </div>
         <div class="form-item">
