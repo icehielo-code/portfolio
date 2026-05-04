@@ -308,4 +308,83 @@ router.post('/batch-fund-detail', async (req, res) => {
   res.json(results);
 });
 
+const LEVEL2_TO_LEVEL1 = {
+  '白酒Ⅱ': '食品饮料', '食品加工': '食品饮料', '饮料乳品': '食品饮料', '调味发酵品Ⅱ': '食品饮料', '休闲食品': '食品饮料',
+  '电池': '电力设备', '光伏设备': '电力设备', '风电设备': '电力设备', '电网设备': '电力设备', '电机Ⅱ': '电力设备',
+  '国有大型银行Ⅱ': '银行', '股份制银行Ⅱ': '银行', '城商行Ⅱ': '银行', '农商行Ⅱ': '银行',
+  '证券Ⅱ': '非银金融', '保险Ⅱ': '非银金融', '多元金融': '非银金融',
+  '半导体': '电子', '元件': '电子', '光学光电子': '电子', '消费电子': '电子', '电子化学品Ⅱ': '电子',
+  '软件开发': '计算机', '计算机设备': '计算机', 'IT服务Ⅱ': '计算机',
+  '化学制药': '医药生物', '中药Ⅱ': '医药生物', '生物制品': '医药生物', '医疗器械': '医药生物', '医药商业': '医药生物', '医疗服务': '医药生物',
+  '房地产开发': '房地产', '房地产服务': '房地产',
+  '乘用车': '汽车', '商用车': '汽车', '汽车零部件': '汽车', '摩托车及其他': '汽车',
+  '航空装备Ⅱ': '国防军工', '航天装备Ⅱ': '国防军工', '军工电子Ⅱ': '国防军工', '地面兵装Ⅱ': '国防军工',
+  '煤炭开采': '煤炭',
+  '工业金属': '有色金属', '小金属': '有色金属', '金属新材料': '有色金属', '贵金属': '有色金属', '能源金属': '有色金属',
+  '炼化及贸易': '石油石化', '油服工程': '石油石化',
+  '化学原料': '基础化工', '化学制品': '基础化工', '农化制品': '基础化工', '塑料': '基础化工', '橡胶': '基础化工',
+  '通用设备': '机械设备', '专用设备': '机械设备', '自动化设备': '机械设备', '轨交设备Ⅱ': '机械设备', '工程机械': '机械设备',
+  '电力': '公用事业', '燃气Ⅱ': '公用事业', '环保设备Ⅱ': '公用事业',
+  '航空机场': '交通运输', '铁路公路': '交通运输', '航运港口': '交通运输', '物流': '交通运输',
+  '水泥': '建筑材料', '玻璃玻纤': '建筑材料', '装修建材': '建筑材料',
+  '房屋建设Ⅱ': '建筑装饰', '基础建设': '建筑装饰', '专业工程': '建筑装饰', '工程咨询服务Ⅱ': '建筑装饰',
+  '白色家电': '家用电器', '黑色家电': '家用电器', '小家电': '家用电器', '家电零部件Ⅱ': '家用电器',
+  '游戏Ⅱ': '传媒', '影视院线': '传媒', '广告营销': '传媒', '出版': '传媒', '数字媒体': '传媒',
+  '通信服务': '通信', '通信设备': '通信',
+  '种植业': '农林牧渔', '养殖业': '农林牧渔', '渔业': '农林牧渔', '饲料': '农林牧渔', '动物保健Ⅱ': '农林牧渔',
+  '纺织制造': '纺织服饰', '服装家纺': '纺织服饰', '饰品': '纺织服饰',
+  '造纸': '轻工制造', '家居用品': '轻工制造', '文娱用品': '轻工制造', '包装印刷': '轻工制造',
+  '旅游及景区': '社会服务', '酒店餐饮': '社会服务', '教育': '社会服务', '专业服务': '社会服务',
+  '普钢': '钢铁', '特钢Ⅱ': '钢铁',
+  '焦炭Ⅱ': '煤炭',
+  '贸易Ⅱ': '商贸零售', '一般零售': '商贸零售', '专业连锁Ⅱ': '商贸零售',
+};
+
+function level2ToLevel1(level2) {
+  if (LEVEL2_TO_LEVEL1[level2]) return LEVEL2_TO_LEVEL1[level2];
+  // Strip Ⅰ/Ⅱ/Ⅲ suffix and try again
+  const stripped = level2.replace(/[ⅠⅡⅢ]$/, '');
+  if (LEVEL2_TO_LEVEL1[stripped]) return LEVEL2_TO_LEVEL1[stripped];
+  return '其他';
+}
+
+async function fetchIndustries(secids) {
+  const results = {};
+  await Promise.all(secids.map(async (secid) => {
+    try {
+      const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f57,f58,f127`;
+      const resp = await fetchUrl(url, { Referer: 'https://quote.eastmoney.com/' }, 5000);
+      const data = await resp.json();
+      if (data?.data?.f127) {
+        const level2 = data.data.f127;
+        results[secid] = {
+          code: data.data.f57 || '',
+          name: data.data.f58 || '',
+          level2,
+          level1: level2ToLevel1(level2),
+        };
+      } else {
+        results[secid] = { level2: '', level1: '其他' };
+      }
+    } catch {
+      results[secid] = { level2: '', level1: '其他' };
+    }
+  }));
+  return results;
+}
+
+router.get('/industries', async (req, res) => {
+  const secids = (req.query.secids || '').split(',').filter(Boolean);
+  if (!secids.length) return res.json({});
+  const industries = await fetchIndustries(secids);
+  res.json(industries);
+});
+
+router.post('/industries', async (req, res) => {
+  const { secids } = req.body;
+  if (!Array.isArray(secids) || !secids.length) return res.json({});
+  const industries = await fetchIndustries(secids);
+  res.json(industries);
+});
+
 module.exports = router;

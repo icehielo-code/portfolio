@@ -35,6 +35,7 @@ export const proxyApi = {
   fundDetail: (code) => http.get('/proxy/fund-detail', { params: { code } }).then(r => r.data),
   batchFundDetail: (codes) => http.post('/proxy/batch-fund-detail', { codes }).then(r => r.data),
   stockQuotes: (secids) => http.get('/proxy/stock-quotes', { params: { secids } }).then(r => r.data),
+  industries: (secids) => http.post('/proxy/industries', { secids }).then(r => r.data),
 }
 
 export const aiApi = {

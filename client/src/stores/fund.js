@@ -7,6 +7,7 @@ export const useFundStore = defineStore('fund', () => {
   const strategies = ref([])
   const checkpoints = ref([])
   const originMode = ref(false)
+  const privacyMode = ref(false)
   const activeStrategyId = ref(null)
   const loading = ref(false)
 
@@ -126,9 +127,13 @@ export const useFundStore = defineStore('fund', () => {
     await settingsApi.set('origin_mode', String(val))
   }
 
+  function togglePrivacy() {
+    privacyMode.value = !privacyMode.value
+  }
+
   return {
-    funds, strategies, checkpoints, originMode, activeStrategyId, loading,
-    totalValue, latestCheckpoint, getCheckpointNav, activeStrategy,
+    funds, strategies, checkpoints, originMode, privacyMode, activeStrategyId, loading,
+    totalValue, latestCheckpoint, getCheckpointNav, togglePrivacy, activeStrategy,
     loadAll, addFund, updateFund, removeFund, refreshAllNAVs,
     addStrategy, updateStrategy, removeStrategy, activateStrategy,
     addCheckpoint, removeCheckpoint, toggleOriginMode,

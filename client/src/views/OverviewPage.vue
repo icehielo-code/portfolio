@@ -57,7 +57,7 @@
       <div class="metric">
         <div class="metric-label">持有收益</div>
         <div class="metric-value" :class="totalPL >= 0 ? 'up' : 'down'">{{ totalPL >= 0 ? '+' : '' }}¥{{ formatNum(Math.abs(totalPL)) }}</div>
-        <div class="metric-sub">{{ totalPLRate >= 0 ? '+' : '' }}{{ totalPLRate.toFixed(2) }}%</div>
+        <div class="metric-sub">{{ mask((totalPLRate >= 0 ? '+' : '') + totalPLRate.toFixed(2) + '%') }}</div>
       </div>
       <div class="metric">
         <div class="metric-label">最大回撤</div>
@@ -89,15 +89,15 @@
                 </span>
               </div>
             </td>
-            <td>{{ f.nav?.toFixed(4) }}</td>
-            <td>{{ baseNavForFund(f).toFixed(4) }}</td>
+            <td>{{ mask(f.nav?.toFixed(4)) }}</td>
+            <td>{{ mask(baseNavForFund(f).toFixed(4)) }}</td>
             <td>¥{{ formatNum(f.nav * f.shares) }}</td>
             <td>
               <div :class="fundPL(f) >= 0 ? 'up' : 'down'" style="font-weight:500;">
                 {{ fundPL(f) >= 0 ? '+' : '' }}¥{{ formatNum(Math.abs(fundPL(f))) }}
               </div>
               <div class="metric-sub" :class="fundPLRate(f) >= 0 ? 'up' : 'down'">
-                {{ fundPLRate(f) >= 0 ? '+' : '' }}{{ fundPLRate(f).toFixed(2) }}%
+                {{ mask((fundPLRate(f) >= 0 ? '+' : '') + fundPLRate(f).toFixed(2) + '%') }}
               </div>
             </td>
             <td>
@@ -224,9 +224,11 @@ const phaseTagsMap = computed(() => {
 })
 
 function formatNum(n) {
-  if (n >= 10000) return (n / 10000).toFixed(2) + '万'
-  return n.toFixed(2)
+  if (store.privacyMode) return '***'
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
+
+function mask(val) { return store.privacyMode ? '***' : val }
 
 function addNewFund() {
   openEdit({ id: null, code: '', name: '', type: 'A股公募', nav: 0, shares: 0, target: 0, origin_nav: 0, category: '权益类', style: '均衡型', manager: '', top_holdings: [] })
