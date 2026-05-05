@@ -161,27 +161,12 @@
         </div>
         <div v-if="industryData.length" class="viz-industry-section">
           <div class="section-title">行业分布 · 面积=资金占比 · 颜色=当日涨跌</div>
-          <div class="viz-treemap">
-            <div v-for="ind in industryData" :key="ind.name" class="viz-tm-cell"
-              :style="{ flexBasis: Math.max(ind.pct * 2.5, 8) + '%', background: ind.color }"
-              @mouseenter="hoveredIndustry = ind.name"
-              @mouseleave="hoveredIndustry = null"
-            >
-              <span class="viz-tm-name" v-if="ind.pct > 2">{{ ind.name }}</span>
-              <span class="viz-tm-pct">{{ ind.pct.toFixed(1) }}%</span>
-              <span class="viz-tm-change" :style="{ color: ind.change >= 0 ? '#ffcdd2' : '#c8e6c9' }">
-                {{ ind.change >= 0 ? '+' : '' }}{{ ind.change.toFixed(2) }}%
-              </span>
-              <!-- Tooltip -->
-              <div v-if="hoveredIndustry === ind.name && industryFundMap[ind.name]" class="viz-tm-tip">
-                <div class="viz-tm-tip-title">{{ ind.name }}</div>
-                <div v-for="f in industryFundMap[ind.name]" :key="f.code" class="viz-tm-tip-row">
-                  <span class="viz-tm-tip-fund">{{ f.name }}</span>
-                  <span class="viz-tm-tip-pct">{{ f.pct.toFixed(1) }}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <IndustryTreemap
+            :industryData="industryData"
+            :industryFundMap="industryFundMap"
+            :privacyMode="store.privacyMode"
+            :active="allocTab === 'holdings'"
+          />
         </div>
 
         <div v-if="holdingsData.length" class="viz-holdings-grid">
@@ -238,12 +223,11 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useFundStore } from '../stores/fund'
 import { proxyApi } from '../api'
+import IndustryTreemap from '../components/IndustryTreemap.vue'
 
 const store = useFundStore()
 const allocTab = ref('overview')
 const selectedStyle = ref(null)
-const hoveredIndustry = ref(null)
-
 const COLORS = ['#378ADD','#1D9E75','#E24B4A','#BA7517','#7F77DD','#D4537E','#0F6E56','#3BA8D4','#E8A020','#C55DA0']
 
 const tv = computed(() => store.totalValue)
@@ -864,110 +848,6 @@ function formatAmt(n) {
 
 .viz-industry-section {
   margin-bottom: 20px;
-}
-
-.viz-treemap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  min-height: 120px;
-}
-
-.viz-tm-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  padding: 8px 4px;
-  min-width: 40px;
-  flex-grow: 1;
-  transition: flex-basis .5s ease;
-}
-
-.viz-tm-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.95);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.viz-tm-pct {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  margin-top: 2px;
-}
-
-.viz-tm-change {
-  font-size: 10px;
-  font-weight: 500;
-  margin-top: 1px;
-}
-
-.viz-tm-cell {
-  position: relative;
-}
-
-.viz-tm-tip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border-md);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
-  min-width: 180px;
-  max-width: 260px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  z-index: 20;
-  pointer-events: none;
-}
-
-.viz-tm-tip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: var(--color-bg-primary);
-}
-
-.viz-tm-tip-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 0.5px solid var(--color-border);
-}
-
-.viz-tm-tip-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2px 0;
-  gap: 12px;
-}
-
-.viz-tm-tip-fund {
-  font-size: 12px;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.viz-tm-tip-pct {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
 }
 
 .viz-holding-card {

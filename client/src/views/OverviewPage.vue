@@ -57,6 +57,26 @@
     </div>
 
     <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span class="section-title" style="margin-bottom:0;">收益分解</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="viz-mode-btn" :class="{ active: chartMode === 'waterfall' }" @click="chartMode = 'waterfall'">瀑布图</button>
+          <span style="color:var(--color-border);font-size:11px;">|</span>
+          <button class="viz-mode-btn" :class="{ active: chartMode === 'bubble' }" @click="chartMode = 'bubble'">气泡图</button>
+        </div>
+      </div>
+      <div class="viz-mode-hint" v-if="chartMode === 'waterfall'">灰色=总成本 → 红/绿=各基金盈亏贡献 → 蓝色=总市值，逐步分解收益来源</div>
+      <div class="viz-mode-hint" v-else>X轴=仓位比例 · Y轴=收益率 · 气泡大小=市值，观察各基金在四象限中的位置</div>
+      <WaterfallChart
+        :funds="store.funds"
+        :baseNavForFund="baseNavForFund"
+        :totalValue="totalValue"
+        :privacyMode="store.privacyMode"
+        :mode="chartMode"
+      />
+    </div>
+
+    <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <span class="section-title" style="margin-bottom:0;">持仓基金</span>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;">
@@ -132,12 +152,14 @@
 <script setup>
 import { ref, computed, inject } from 'vue'
 import { useFundStore } from '../stores/fund'
+import WaterfallChart from '../components/WaterfallChart.vue'
 
 const store = useFundStore()
 const openEdit = inject('openEdit')
 const toast = inject('toast')
 
 const showCumulative = ref(false)
+const chartMode = ref('waterfall')
 const cpLabel = ref('')
 const cpDate = ref(new Date().toISOString().slice(0, 10))
 const cpNavs = ref('')
@@ -284,3 +306,39 @@ async function addCheckpoint() {
   toast('检查点已添加')
 }
 </script>
+
+<style scoped>
+.viz-mode-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all .15s;
+}
+
+.viz-mode-btn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-md);
+}
+
+.viz-mode-btn.active {
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border-color: var(--color-accent);
+}
+
+.viz-mode-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  line-height: 1.5;
+}
+</style>
