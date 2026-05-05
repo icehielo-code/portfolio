@@ -8,6 +8,7 @@ export const useFundStore = defineStore('fund', () => {
   const checkpoints = ref([])
   const originMode = ref(false)
   const privacyMode = ref(false)
+  const navRefreshTime = ref('')
   const activeStrategyId = ref(null)
   const loading = ref(false)
 
@@ -84,6 +85,17 @@ export const useFundStore = defineStore('fund', () => {
         if (fund) fund.nav = u.nav
       })
     }
+    // Store daily change % in memory for todayPL calculation
+    for (const [code, data] of Object.entries(results)) {
+      const fund = funds.value.find(f => f.code === code)
+      if (fund && data.gszzl) {
+        fund._changePct = parseFloat(data.gszzl)
+      }
+    }
+    const now = new Date()
+    navRefreshTime.value = String(now.getFullYear()).slice(2) + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0')
     return updates.length
   }
 
@@ -132,7 +144,7 @@ export const useFundStore = defineStore('fund', () => {
   }
 
   return {
-    funds, strategies, checkpoints, originMode, privacyMode, activeStrategyId, loading,
+    funds, strategies, checkpoints, originMode, privacyMode, navRefreshTime, activeStrategyId, loading,
     totalValue, latestCheckpoint, getCheckpointNav, togglePrivacy, activeStrategy,
     loadAll, addFund, updateFund, removeFund, refreshAllNAVs,
     addStrategy, updateStrategy, removeStrategy, activateStrategy,

@@ -19,6 +19,10 @@
       <p>{{ today }}</p>
     </div>
     <div class="header-right">
+      <span class="current-user" @click="$emit('switch-user')" title="切换用户">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        {{ currentUser?.username || '未知' }}
+      </span>
       <button class="btn btn-icon" :class="{ spinning: refreshing }" @click="refreshNav" title="刷新净值">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="23 4 23 10 17 10"></polyline>
@@ -40,7 +44,8 @@
 import { ref, computed } from 'vue'
 import { useFundStore } from '../stores/fund'
 
-const emit = defineEmits(['export', 'import', 'ai-advice'])
+defineProps({ currentUser: Object })
+const emit = defineEmits(['export', 'import', 'ai-advice', 'switch-user'])
 const store = useFundStore()
 const refreshing = ref(false)
 

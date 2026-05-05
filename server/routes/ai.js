@@ -17,9 +17,9 @@ function getParam(key) {
   return db.prepare('SELECT value FROM params WHERE key = ?').get(key)?.value || '';
 }
 
-function buildContext(type) {
-  const funds = db.prepare('SELECT * FROM funds ORDER BY sort_order, id').all();
-  const activeStrategy = db.prepare('SELECT * FROM strategies WHERE is_active = 1').get();
+function buildContext(userId, type) {
+  const funds = db.prepare('SELECT * FROM funds WHERE user_id = ? ORDER BY sort_order, id').all(userId);
+  const activeStrategy = db.prepare('SELECT * FROM strategies WHERE is_active = 1 AND user_id = ?').get(userId);
   const total = funds.reduce((s, f) => s + f.nav * f.shares, 0);
 
   const summary = funds.map(f => {
@@ -55,12 +55,12 @@ router.post('/chat', async (req, res) => {
     return res.status(500).json({ error: '未配置 DEEPSEEK_API_KEY' });
   }
 
-  const userMsg = message || buildContext(type);
+  const userMsg = message || buildContext(req.userId, type);
 
-  db.prepare('INSERT INTO ai_conversations (role, content) VALUES (?, ?)').run('user', userMsg);
+  db.prepare('INSERT INTO ai_conversations (role, content, user_id) VALUES (?, ?, ?)').run('user', userMsg, req.userId);
 
   try {
-    const history = db.prepare('SELECT role, content FROM ai_conversations ORDER BY id DESC LIMIT 20').all().reverse();
+    const history = db.prepare('SELECT role, content FROM ai_conversations WHERE user_id = ? ORDER BY id DESC LIMIT 20').all(req.userId).reverse();
 
     const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -86,7 +86,7 @@ router.post('/chat', async (req, res) => {
     const data = await resp.json();
     const reply = data.choices[0].message.content;
 
-    db.prepare('INSERT INTO ai_conversations (role, content) VALUES (?, ?)').run('assistant', reply);
+    db.prepare('INSERT INTO ai_conversations (role, content, user_id) VALUES (?, ?, ?)').run('assistant', reply, req.userId);
 
     res.json({ reply });
   } catch (e) {
@@ -192,12 +192,12 @@ ${ocrText}
 
 router.get('/history', (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
-  const messages = db.prepare('SELECT * FROM ai_conversations ORDER BY id DESC LIMIT ?').all(limit).reverse();
+  const messages = db.prepare('SELECT * FROM ai_conversations WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(req.userId, limit).reverse();
   res.json(messages);
 });
 
 router.delete('/history', (req, res) => {
-  db.prepare('DELETE FROM ai_conversations').run();
+  db.prepare('DELETE FROM ai_conversations WHERE user_id = ?').run(req.userId);
   res.json({ ok: true });
 });
 

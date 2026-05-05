@@ -56,6 +56,13 @@
             <input v-model.number="form.origin_nav" type="number" step="0.0001" />
           </div>
           <div class="form-item">
+            <label>持有收益(%)</label>
+            <input v-model.number="returnPct" type="number" step="0.01" placeholder="如 15 表示 +15%" />
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-item">
             <label>大类</label>
             <select v-model="form.category">
               <option>权益类</option><option>境内固收</option><option>海外市场</option><option>商品及其它</option>
@@ -160,6 +167,7 @@ const form = reactive({
   target: 0, origin_nav: 0, category: '权益类', style: '均衡型',
   manager: '', top_holdings: [],
 })
+const returnPct = ref(null)
 const looking = ref(false)
 const lookupStatus = ref('')
 const lookupOk = ref(false)
@@ -193,6 +201,11 @@ function autoStyle(name) {
 
 watch(() => form.type, (t) => { form.category = autoCategory(t) })
 watch(() => form.name, (n) => { if (!props.fund?.id) form.style = autoStyle(n) })
+watch(returnPct, (pct) => {
+  if (pct !== null && pct !== '' && form.nav > 0) {
+    form.origin_nav = form.nav / (1 + pct / 100)
+  }
+})
 
 function addHolding() {
   form.top_holdings.push({ name: '', pct: 0 })

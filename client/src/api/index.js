@@ -2,6 +2,17 @@ import axios from 'axios'
 
 const http = axios.create({ baseURL: '/api' })
 
+http.interceptors.request.use(config => {
+  const user = JSON.parse(localStorage.getItem('currentUser') || 'null')
+  if (user?.id) config.headers['x-user-id'] = user.id
+  return config
+})
+
+export const usersApi = {
+  list: () => http.get('/users').then(r => r.data),
+  login: (username) => http.post('/users/login', { username }).then(r => r.data),
+}
+
 export const fundsApi = {
   list: () => http.get('/funds').then(r => r.data),
   create: (data) => http.post('/funds', data).then(r => r.data),

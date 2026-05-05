@@ -1,15 +1,6 @@
 <template>
   <div>
-    <div class="mode-banner" :class="store.originMode ? 'mode-origin' : 'mode-stage'">
-      <span class="mode-dot"></span>
-      {{ store.originMode ? '原始总收益模式 — 收益按买入时净值计算' : '阶段模式 — 收益按最新检查点净值计算' }}
-      <label class="toggle" style="margin-left:auto;">
-        <input type="checkbox" :checked="store.originMode" @change="store.toggleOriginMode($event.target.checked)" />
-        <span class="toggle-track"></span>
-      </label>
-    </div>
-
-    <div class="card">
+    <div class="card" style="background:var(--color-bg-secondary);border-color:transparent;">
       <div class="section-title">检查点</div>
       <div class="cp-add-row">
         <div class="form-item">
@@ -55,7 +46,7 @@
         <div class="metric-value" :class="todayPL >= 0 ? 'up' : 'down'">{{ todayPL >= 0 ? '+' : '' }}¥{{ formatNum(Math.abs(todayPL)) }}</div>
       </div>
       <div class="metric">
-        <div class="metric-label">持有收益</div>
+        <div class="metric-label">{{ phaseLabel }}</div>
         <div class="metric-value" :class="totalPL >= 0 ? 'up' : 'down'">{{ totalPL >= 0 ? '+' : '' }}¥{{ formatNum(Math.abs(totalPL)) }}</div>
         <div class="metric-sub">{{ mask((totalPLRate >= 0 ? '+' : '') + totalPLRate.toFixed(2) + '%') }}</div>
       </div>
@@ -66,15 +57,24 @@
     </div>
 
     <div class="card">
-      <div class="section-title">持仓基金</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span class="section-title" style="margin-bottom:0;">持仓基金</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;">
+          <span>{{ showCumulative ? '累计收益' : '阶段收益' }}</span>
+          <div class="toggle" style="width:32px;height:18px;">
+            <input type="checkbox" v-model="showCumulative" />
+            <span class="toggle-track"></span>
+          </div>
+        </label>
+      </div>
       <table class="fund-table" v-if="store.funds.length">
         <thead>
           <tr>
             <th>基金</th>
-            <th>净值</th>
-            <th>基准净值</th>
+            <th>净值 <span v-if="store.navRefreshTime" style="font-weight:400;font-size:10px;">{{ store.navRefreshTime }}</span></th>
+            <th>买入净值</th>
             <th>市值</th>
-            <th>阶段盈亏</th>
+            <th>{{ phaseLabel }}</th>
             <th></th>
           </tr>
         </thead>
@@ -137,6 +137,7 @@ const store = useFundStore()
 const openEdit = inject('openEdit')
 const toast = inject('toast')
 
+const showCumulative = ref(false)
 const cpLabel = ref('')
 const cpDate = ref(new Date().toISOString().slice(0, 10))
 const cpNavs = ref('')
@@ -144,10 +145,21 @@ const cpNavs = ref('')
 const totalValue = computed(() => store.totalValue)
 
 function baseNavForFund(f) {
-  if (store.originMode) return f.origin_nav
-  const cpNav = store.getCheckpointNav(f.code)
-  return cpNav !== null ? cpNav : f.origin_nav
+  if (showCumulative.value) return f.origin_nav
+  const cp = store.latestCheckpoint
+  if (cp) {
+    const snap = cp.nav_snapshots?.find(s => s.code === f.code)
+    if (snap?.nav) return snap.nav
+  }
+  return f.origin_nav
 }
+
+const phaseLabel = computed(() => {
+  if (showCumulative.value) return '持有收益'
+  const cp = store.latestCheckpoint
+  if (cp) return '收益 (' + cp.checkpoint_date.slice(5) + ')'
+  return '持有收益'
+})
 
 const totalCost = computed(() => store.funds.reduce((s, f) => s + baseNavForFund(f) * f.shares, 0))
 
@@ -157,7 +169,8 @@ const totalPLRate = computed(() => totalCost.value > 0 ? (totalPL.value / totalC
 
 const todayPL = computed(() => {
   return store.funds.reduce((s, f) => {
-    return s + (f.nav - baseNavForFund(f)) * f.shares * 0.002
+    const change = f._changePct || 0
+    return s + f.nav * f.shares * (change / 100)
   }, 0)
 })
 

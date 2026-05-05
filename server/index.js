@@ -10,6 +10,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+const auth = require('./middleware/auth');
 const fundsRouter = require('./routes/funds');
 const strategiesRouter = require('./routes/strategies');
 const checkpointsRouter = require('./routes/checkpoints');
@@ -17,21 +18,23 @@ const settingsRouter = require('./routes/settings');
 const paramsRouter = require('./routes/params');
 const proxyRouter = require('./routes/proxy');
 const aiRouter = require('./routes/ai');
+const usersRouter = require('./routes/users');
 
-app.use('/api/funds', fundsRouter);
-app.use('/api/strategies', strategiesRouter);
-app.use('/api/checkpoints', checkpointsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/funds', auth, fundsRouter);
+app.use('/api/strategies', auth, strategiesRouter);
+app.use('/api/checkpoints', auth, checkpointsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/params', paramsRouter);
 app.use('/api/proxy', proxyRouter);
-app.use('/api/ai', aiRouter);
+app.use('/api/ai', auth, aiRouter);
 
-app.get('/api/export', (req, res) => {
+app.get('/api/export', auth, (req, res) => {
   const db = require('./db');
   const data = {
-    funds: db.prepare('SELECT * FROM funds ORDER BY sort_order, id').all(),
-    strategies: db.prepare('SELECT * FROM strategies ORDER BY sort_order, id').all(),
-    checkpoints: db.prepare('SELECT * FROM checkpoints ORDER BY id').all(),
+    funds: db.prepare('SELECT * FROM funds WHERE user_id = ? ORDER BY sort_order, id').all(req.userId),
+    strategies: db.prepare('SELECT * FROM strategies WHERE user_id = ? ORDER BY sort_order, id').all(req.userId),
+    checkpoints: db.prepare('SELECT * FROM checkpoints WHERE user_id = ? ORDER BY id').all(req.userId),
     settings: db.prepare('SELECT * FROM settings').all(),
     exported_at: new Date().toISOString(),
   };
@@ -41,47 +44,48 @@ app.get('/api/export', (req, res) => {
   res.json(data);
 });
 
-app.post('/api/import', (req, res) => {
+app.post('/api/import', auth, (req, res) => {
   const db = require('./db');
   const { funds, strategies, checkpoints, settings } = req.body;
 
   const transaction = db.transaction(() => {
     if (Array.isArray(funds) && funds.length) {
-      db.prepare('DELETE FROM funds').run();
+      db.prepare('DELETE FROM funds WHERE user_id = ?').run(req.userId);
       const stmt = db.prepare(`
-        INSERT INTO funds (code, name, type, nav, shares, target, origin_nav, category, style, manager, top_holdings, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO funds (code, name, type, nav, shares, target, origin_nav, category, style, manager, top_holdings, sort_order, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       funds.forEach((f, i) => {
         stmt.run(f.code, f.name, f.type, f.nav, f.shares, f.target, f.origin_nav,
           f.category, f.style, f.manager,
           typeof f.top_holdings === 'string' ? f.top_holdings : JSON.stringify(f.top_holdings || []),
-          i + 1);
+          i + 1, req.userId);
       });
     }
 
     if (Array.isArray(strategies) && strategies.length) {
-      db.prepare('DELETE FROM strategies').run();
+      db.prepare('DELETE FROM strategies WHERE user_id = ?').run(req.userId);
       const stmt = db.prepare(`
-        INSERT INTO strategies (name, description, rules, is_active, sort_order)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO strategies (name, description, rules, is_active, sort_order, user_id)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
       strategies.forEach((s, i) => {
         stmt.run(s.name, s.description,
           typeof s.rules === 'string' ? s.rules : JSON.stringify(s.rules || []),
-          s.is_active ? 1 : 0, i + 1);
+          s.is_active ? 1 : 0, i + 1, req.userId);
       });
     }
 
     if (Array.isArray(checkpoints) && checkpoints.length) {
-      db.prepare('DELETE FROM checkpoints').run();
+      db.prepare('DELETE FROM checkpoints WHERE user_id = ?').run(req.userId);
       const stmt = db.prepare(`
-        INSERT INTO checkpoints (label, checkpoint_date, nav_snapshots)
-        VALUES (?, ?, ?)
+        INSERT INTO checkpoints (label, checkpoint_date, nav_snapshots, user_id)
+        VALUES (?, ?, ?, ?)
       `);
       checkpoints.forEach(c => {
         stmt.run(c.label, c.checkpoint_date,
-          typeof c.nav_snapshots === 'string' ? c.nav_snapshots : JSON.stringify(c.nav_snapshots || []));
+          typeof c.nav_snapshots === 'string' ? c.nav_snapshots : JSON.stringify(c.nav_snapshots || []),
+          req.userId);
       });
     }
 

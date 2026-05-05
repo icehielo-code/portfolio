@@ -249,6 +249,17 @@ body {
 .ai-input-row input { flex: 1; }
 .ai-input-row button { flex-shrink: 0; }
 
+.login-page { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
+.login-card { text-align: center; max-width: 400px; width: 100%; }
+.login-card h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.5rem; }
+.login-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+.login-row input { flex: 1; padding: 10px 14px; font-size: 15px; border: 0.5px solid var(--color-border-md); border-radius: var(--radius-md); background: var(--color-bg-primary); color: var(--color-text-primary); font-family: var(--font); outline: none; }
+.login-row input:focus { border-color: #378add; box-shadow: 0 0 0 2px rgba(55,138,221,.15); }
+.login-users { margin-top: 1rem; }
+
+.current-user { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; padding: 4px 10px; border-radius: var(--radius-md); border: 0.5px solid var(--color-border); transition: all .15s; }
+.current-user:hover { background: var(--color-bg-secondary); color: var(--color-text-primary); }
+
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--color-text-secondary); }
 .empty-state p { font-size: 14px; margin-bottom: 1rem; }
 
