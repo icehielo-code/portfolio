@@ -78,6 +78,16 @@ db.exec(`
     value       TEXT    NOT NULL DEFAULT '',
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS fund_daily (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL,
+    date        TEXT    NOT NULL,
+    nav         REAL    NOT NULL DEFAULT 0,
+    change_pct  REAL    NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(code, date)
+  );
 `);
 
 // Migrate existing tables: add user_id column if missing (for pre-v1.2 databases)
@@ -130,13 +140,21 @@ if (originModeSetting.cnt === 0) {
   db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('origin_mode', 'false');
 }
 
-const paramsCount = db.prepare('SELECT COUNT(*) as cnt FROM params').get();
-if (paramsCount.cnt === 0) {
-  const insertParam = db.prepare('INSERT INTO params (key, value) VALUES (?, ?)');
-  insertParam.run('DEEPSEEK_API_KEY', process.env.DEEPSEEK_API_KEY || '');
-  insertParam.run('SILICONFLOW_API_KEY', process.env.SILICONFLOW_API_KEY || '');
-  insertParam.run('AI_MODEL', process.env.AI_MODEL || 'deepseek-chat');
-  insertParam.run('OCR_MODEL', process.env.OCR_MODEL || 'deepseek-ai/DeepSeek-OCR');
+// Ensure param rows exist and backfill from env if stored value is empty
+const paramDefaults = {
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || '',
+  SILICONFLOW_API_KEY: process.env.SILICONFLOW_API_KEY || '',
+  AI_MODEL: process.env.AI_MODEL || 'deepseek-chat',
+  OCR_MODEL: process.env.OCR_MODEL || 'deepseek-ai/DeepSeek-OCR',
+};
+const ensureParam = db.prepare(
+  `INSERT INTO params (key, value) VALUES (?, ?)
+   ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+   updated_at = datetime('now','localtime')
+   WHERE params.value = '' AND excluded.value != ''`
+);
+for (const [key, val] of Object.entries(paramDefaults)) {
+  ensureParam.run(key, val);
 }
 
 module.exports = db;

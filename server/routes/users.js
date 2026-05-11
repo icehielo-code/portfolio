@@ -13,13 +13,15 @@ router.post('/login', (req, res) => {
   const name = username.trim();
 
   let user = db.prepare('SELECT id, username FROM users WHERE username = ?').get(name);
+  let isNew = false
   if (!user) {
     const info = db.prepare('INSERT INTO users (username) VALUES (?)').run(name);
     db.seedStrategiesForUser(info.lastInsertRowid);
     user = { id: info.lastInsertRowid, username: name };
+    isNew = true
   }
 
-  res.json(user);
+  res.json({ ...user, isNew });
 });
 
 module.exports = router;

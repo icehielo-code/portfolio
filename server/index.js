@@ -116,6 +116,97 @@ if (fs.existsSync(clientDist)) {
   });
 }
 
+// ── 每日 18:30 自动刷新净值 (akshare) ──
+let lastAutoRefreshDate = '';
+
+async function autoRefreshNAVs() {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+
+  // Only on weekdays, after 18:30, and not already refreshed today
+  if (dayOfWeek === 0 || dayOfWeek === 6) return;
+  if (hour < 18 || (hour === 18 && minute < 30)) return;
+  if (lastAutoRefreshDate === today) return;
+
+  try {
+    const db = require('./db');
+    const funds = db.prepare('SELECT code FROM funds').all();
+    if (!funds.length) return;
+
+    const codes = funds.map(f => f.code);
+    const { execFile } = require('child_process');
+    const path = require('path');
+
+    const akshareData = await new Promise((resolve) => {
+      const child = execFile('python3', [path.join(__dirname, 'akshare_bridge.py'), '--stdin'], {
+        timeout: 60000, maxBuffer: 1024 * 1024,
+      }, (err, stdout) => {
+        if (err) return resolve({});
+        try { resolve(JSON.parse(stdout)); } catch { resolve({}); }
+      });
+      child.stdin.write(JSON.stringify(codes));
+      child.stdin.end();
+    });
+
+    const results = [];
+    for (const f of funds) {
+      const d = akshareData[f.code];
+      if (d && d.nav) {
+        results.push({ code: f.code, nav: d.nav, date: d.date, changePct: d.change_pct || 0 });
+      }
+    }
+
+    if (results.length) {
+      const updateFund = db.prepare(`UPDATE funds SET nav = ?, updated_at = datetime('now','localtime') WHERE code = ?`);
+      const upsertDaily = db.prepare(
+        `INSERT INTO fund_daily (code, date, nav, change_pct) VALUES (?, ?, ?, ?)
+         ON CONFLICT(code, date) DO UPDATE SET nav = excluded.nav, change_pct = excluded.change_pct`
+      );
+      const transaction = db.transaction(() => {
+        for (const r of results) {
+          updateFund.run(r.nav, r.code);
+          upsertDaily.run(r.code, r.date, r.nav, r.changePct);
+        }
+      });
+      transaction();
+      lastAutoRefreshDate = today;
+      console.log(`[auto-refresh] ${today} 更新了 ${results.length} 只基金净值`);
+    }
+  } catch (e) {
+    console.log('[auto-refresh] error:', e.message);
+  }
+}
+
+// ── fund_daily API ──
+app.get('/api/fund-daily/latest', auth, (req, res) => {
+  const db = require('./db');
+  const globalDate = db.prepare('SELECT date FROM fund_daily ORDER BY date DESC LIMIT 1').get();
+  if (!globalDate) return res.json({ date: '', funds: {} });
+
+  // Per-fund latest: handle funds with different update schedules (QDII, etc.)
+  const rows = db.prepare(`
+    SELECT fd.code, fd.nav, fd.change_pct, fd.date
+    FROM fund_daily fd
+    INNER JOIN (
+      SELECT code, MAX(date) as max_date FROM fund_daily GROUP BY code
+    ) latest ON fd.code = latest.code AND fd.date = latest.max_date
+  `).all();
+
+  const funds = {};
+  for (const r of rows) {
+    funds[r.code] = { nav: r.nav, changePct: r.change_pct, date: r.date };
+  }
+  res.json({ date: globalDate.date, funds });
+});
+
+// Check every 15 minutes
+setInterval(autoRefreshNAVs, 15 * 60 * 1000);
+// Also run once at startup (after a short delay for DB to be ready)
+setTimeout(autoRefreshNAVs, 5000);
+
 app.listen(PORT, () => {
   console.log(`🚀 基金管理系统已启动: http://localhost:${PORT}`);
   console.log(`   API: http://localhost:${PORT}/api/`);

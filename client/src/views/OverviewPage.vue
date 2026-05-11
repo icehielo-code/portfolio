@@ -91,10 +91,11 @@
         <thead>
           <tr>
             <th>基金</th>
-            <th>净值 <span v-if="store.navRefreshTime" style="font-weight:400;font-size:10px;">{{ store.navRefreshTime }}</span></th>
-            <th>买入净值</th>
+            <th>今日估值</th>
+            <th>当日涨跌 <span v-if="store.navDate" style="font-weight:400;font-size:10px;color:var(--color-accent);">({{ store.navDate }})</span></th>
+            <th>净值 <span v-if="store.navDate" style="font-weight:400;font-size:10px;color:var(--color-accent);">({{ store.navDate }})</span></th>
             <th>市值</th>
-            <th>{{ phaseLabel }}</th>
+            <th>买入净值</th>
             <th></th>
           </tr>
         </thead>
@@ -109,17 +110,21 @@
                 </span>
               </div>
             </td>
-            <td>{{ mask(f.nav?.toFixed(4)) }}</td>
-            <td>{{ mask(baseNavForFund(f).toFixed(4)) }}</td>
-            <td>¥{{ formatNum(f.nav * f.shares) }}</td>
+            <td style="font-size:12px;">
+              {{ f._gsz ? mask(f._gsz.toFixed(4)) : '-' }}
+            </td>
             <td>
-              <div :class="fundPL(f) >= 0 ? 'up' : 'down'" style="font-weight:500;">
-                {{ fundPL(f) >= 0 ? '+' : '' }}¥{{ formatNum(Math.abs(fundPL(f))) }}
+              <div :class="(f._changePct || 0) >= 0 ? 'up' : 'down'" style="font-weight:500;">
+                {{ ((f._changePct || 0) >= 0 ? '+' : '') + '¥' + formatNum(Math.abs(dailyPL(f))) }}
               </div>
-              <div class="metric-sub" :class="fundPLRate(f) >= 0 ? 'up' : 'down'">
-                {{ mask((fundPLRate(f) >= 0 ? '+' : '') + fundPLRate(f).toFixed(2) + '%') }}
+              <div class="metric-sub" :class="(f._changePct || 0) >= 0 ? 'up' : 'down'">
+                {{ mask(((f._changePct || 0) >= 0 ? '+' : '') + (f._changePct || 0).toFixed(2) + '%') }}
+                <span v-if="f._navDate && f._navDate !== store.navDate">({{ f._navDate.slice(5) }})</span>
               </div>
             </td>
+            <td>{{ mask(f.nav?.toFixed(4)) }}</td>
+            <td>¥{{ formatNum(f.nav * f.shares) }}</td>
+            <td>{{ mask(baseNavForFund(f).toFixed(4)) }}</td>
             <td>
               <button class="btn" style="font-size:11px;padding:3px 8px;" @click="openEdit(f)">编辑</button>
               <button class="btn" style="font-size:11px;padding:3px 8px;margin-left:4px;color:var(--color-text-danger);" @click="removeFund(f.id)">删除</button>
@@ -204,6 +209,7 @@ const maxDrawdown = computed(() => {
 
 function fundPL(f) { return (f.nav - baseNavForFund(f)) * f.shares }
 function fundPLRate(f) { const base = baseNavForFund(f); return base > 0 ? ((f.nav - base) / base) * 100 : 0 }
+function dailyPL(f) { return f.nav * f.shares * (f._changePct || 0) / 100 }
 
 const rebalanceData = computed(() => {
   const tv = totalValue.value

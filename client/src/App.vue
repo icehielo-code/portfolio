@@ -25,6 +25,7 @@
       <AdvicePage v-if="activeTab === 'advice'" ref="advicePage" />
       <StrategyPage v-if="activeTab === 'strategy'" />
       <EditModal v-if="editFund" :fund="editFund" @save="onSaveFund" @close="editFund = null" />
+      <ApiKeySetupModal v-if="showApiSetup" @saved="onApiSaved" @skip="showApiSetup = false" />
       <Toast :message="toastMsg" v-if="toastMsg" />
     </template>
   </div>
@@ -41,6 +42,7 @@ import AllocatePage from './views/AllocatePage.vue'
 import AdvicePage from './views/AdvicePage.vue'
 import StrategyPage from './views/StrategyPage.vue'
 import EditModal from './components/EditModal.vue'
+import ApiKeySetupModal from './components/ApiKeySetupModal.vue'
 import Toast from './components/Toast.vue'
 
 const store = useFundStore()
@@ -51,6 +53,7 @@ const advicePage = ref(null)
 const currentUser = ref(null)
 const loginName = ref('')
 const users = ref([])
+const showApiSetup = ref(false)
 
 provide('openEdit', (fund) => { editFund.value = { ...fund } })
 provide('toast', (msg) => { toastMsg.value = msg; setTimeout(() => { toastMsg.value = '' }, 2500) })
@@ -63,6 +66,9 @@ onMounted(async () => {
     try {
       currentUser.value = JSON.parse(saved)
       await store.loadAll()
+      await store.loadDailyData()
+      await store.fetchGsz()
+      store.startPolling()
     } catch {
       localStorage.removeItem('currentUser')
     }
@@ -87,9 +93,21 @@ async function doLogin() {
 
 async function selectUser(user) {
   currentUser.value = user
-  localStorage.setItem('currentUser', JSON.stringify(user))
+  localStorage.setItem('currentUser', JSON.stringify({ id: user.id, username: user.username }))
   loginName.value = ''
   await store.loadAll()
+  await store.loadDailyData()
+  await store.fetchGsz()
+  store.startPolling()
+  if (user.isNew) {
+    showApiSetup.value = true
+  }
+}
+
+function onApiSaved() {
+  showApiSetup.value = false
+  toastMsg.value = 'API Key 已配置，AI 功能已就绪'
+  setTimeout(() => { toastMsg.value = '' }, 2500)
 }
 
 async function onSaveFund(data) {

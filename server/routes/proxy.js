@@ -1,7 +1,68 @@
 const express = require('express');
 const router = express.Router();
+const { execFile } = require('child_process');
+const path = require('path');
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// ── akshare Python bridge ──
+const AKSHARE_SCRIPT = path.join(__dirname, '..', 'akshare_bridge.py');
+
+async function tryAkshare(code) {
+  return new Promise((resolve) => {
+    execFile('python3', [AKSHARE_SCRIPT, code], {
+      timeout: 15000,
+      maxBuffer: 1024 * 1024,
+    }, (err, stdout) => {
+      if (err) return resolve(null);
+      try {
+        const data = JSON.parse(stdout);
+        const r = data[code];
+        if (r && r.nav) {
+          resolve({
+            name: '', // name fetched separately
+            nav: String(r.nav),
+            dwjz: String(r.nav),
+            jzrq: r.date || '',
+            gszzl: String(r.change_pct || 0),
+          });
+        } else {
+          resolve(null);
+        }
+      } catch { resolve(null); }
+    });
+  });
+}
+
+async function batchAkshare(codes) {
+  return new Promise((resolve) => {
+    const input = JSON.stringify(codes);
+    const child = execFile('python3', [AKSHARE_SCRIPT, '--stdin'], {
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
+    }, (err, stdout) => {
+      if (err) return resolve({});
+      try {
+        const data = JSON.parse(stdout);
+        const results = {};
+        for (const [code, r] of Object.entries(data)) {
+          if (r.nav) {
+            results[code] = {
+              name: '',
+              nav: String(r.nav),
+              dwjz: String(r.nav),
+              jzrq: r.date || '',
+              gszzl: String(r.change_pct || 0),
+            };
+          }
+        }
+        resolve(results);
+      } catch { resolve({}); }
+    });
+    child.stdin.write(input);
+    child.stdin.end();
+  });
+}
 
 async function fetchUrl(url, headers = {}, timeout = 8000) {
   const controller = new AbortController();
@@ -39,48 +100,37 @@ async function tryTiantian(code) {
 
 async function tryEastmoney(code) {
   try {
-    const url = `https://fund.eastmoney.com/pingzhongdata/${code}.js`;
-    const resp = await fetchUrl(url, { Referer: 'https://fund.eastmoney.com/' });
-    const raw = await resp.text();
+    // Use REST API for accurate NAV + date
+    const apiUrl = `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1`;
+    const apiResp = await fetchUrl(apiUrl, { Referer: 'https://fundf10.eastmoney.com/' });
+    const json = await apiResp.json();
+    const list = json?.Data?.LSJZList;
+    if (!list || !list.length) return null;
 
-    const nameM = raw.match(/var\s+fS_name\s*=\s*"([^"]+)"/);
-    if (!nameM) return null;
-    const name = nameM[1];
+    const latest = list[0];
+    const dwjz = latest.DWJZ;
+    const jzrq = latest.FSRQ;  // yyyy-MM-dd
+    const changePct = latest.JZZZL || '0';
 
-    const ishbM = raw.match(/var\s+ishb\s*=\s*(true|false)/);
-    const ishb = ishbM && ishbM[1] === 'true';
+    // Get fund name from the old JS file (lightweight)
+    let name = '';
+    try {
+      const jsUrl = `https://fund.eastmoney.com/pingzhongdata/${code}.js`;
+      const jsResp = await fetchUrl(jsUrl, { Referer: 'https://fund.eastmoney.com/' });
+      const raw = await jsResp.text();
+      const nameM = raw.match(/var\s+fS_name\s*=\s*"([^"]+)"/);
+      if (nameM) name = nameM[1];
 
-    if (ishb) {
-      const incomeM = raw.match(/var\s+Data_millionCopiesIncome\s*=\s*(\[.*?\]);/s);
-      let jzrq = '';
-      if (incomeM) {
-        try {
-          const arr = JSON.parse(incomeM[1]);
-          if (arr && arr.length) {
-            const ts = arr[arr.length - 1][0];
-            if (ts) jzrq = new Date(ts).toISOString().slice(0, 10);
-          }
-        } catch {}
+      // Money fund check
+      const ishbM = raw.match(/var\s+ishb\s*=\s*(true|false)/);
+      if (ishbM && ishbM[1] === 'true') {
+        return { name, nav: '1.0000', dwjz: '1.0000', jzrq, type_hint: '货币基金', gszzl: '0' };
       }
-      return { name, nav: '1.0000', dwjz: '1.0000', jzrq, type_hint: '货币基金' };
-    }
+    } catch {}
 
-    const navM = raw.match(/var\s+Data_netWorthTrend\s*=\s*(\[.*?\]);/s);
-    let dwjz = null, jzrq = '';
-    if (navM) {
-      try {
-        const arr = JSON.parse(navM[1]);
-        if (arr && arr.length) {
-          const last = arr[arr.length - 1];
-          dwjz = String(last.y || '');
-          if (last.x) jzrq = new Date(last.x).toISOString().slice(0, 10);
-        }
-      } catch {}
-    }
+    if (!name) return null;
 
-    const result = { name, dwjz, jzrq };
-    if (dwjz) result.nav = dwjz;
-    return result;
+    return { name, nav: dwjz, dwjz, jzrq, gszzl: changePct };
   } catch { return null; }
 }
 
@@ -114,16 +164,31 @@ router.get('/', async (req, res) => {
   }
 
   const apis = [
-    { name: '天天基金', fn: tryTiantian },
+    { name: 'akshare', fn: tryAkshare },
     { name: '东方财富', fn: tryEastmoney },
+    { name: '天天基金', fn: tryTiantian },
     { name: '新浪财经', fn: trySina },
   ];
 
   for (const api of apis) {
     try {
       const result = await api.fn(code);
-      if (result && result.name) {
+      const ok = result && (result.name || api.name === 'akshare');
+      if (ok) {
         result.source = api.name;
+        // Supplement name if missing (akshare doesn't fetch name)
+        if (!result.name) {
+          try {
+            const tt = await tryTiantian(code);
+            if (tt?.name) result.name = tt.name;
+          } catch {}
+        }
+        // Supplement with 天天基金 gsz (estimated NAV) for intraday display
+        // Don't overwrite gszzl from akshare — it's the official daily change
+        if (result.name && api.name !== '天天基金') {
+          const tt = await tryTiantian(code);
+          if (tt?.gsz) result.gsz = tt.gsz;
+        }
         return res.json(result);
       }
     } catch {}
@@ -137,24 +202,47 @@ router.post('/batch', async (req, res) => {
   if (!Array.isArray(codes)) return res.status(400).json({ error: '参数格式错误' });
 
   const results = {};
-  await Promise.all(codes.map(async (code) => {
-    const apis = [
-      { name: '天天基金', fn: tryTiantian },
-      { name: '东方财富', fn: tryEastmoney },
-      { name: '新浪财经', fn: trySina },
-    ];
-    for (const api of apis) {
+
+  // 1) Try akshare batch first
+  const akshareResults = await batchAkshare(codes);
+  const remaining = codes.filter(c => !akshareResults[c]);
+  for (const [code, result] of Object.entries(akshareResults)) {
+    result.source = 'akshare';
+    results[code] = result;
+  }
+
+  // 2) Fallback per-code for remaining
+  if (remaining.length) {
+    await Promise.all(remaining.map(async (code) => {
+      const apis = [
+        { name: '东方财富', fn: tryEastmoney },
+        { name: '天天基金', fn: tryTiantian },
+        { name: '新浪财经', fn: trySina },
+      ];
+      for (const api of apis) {
+        try {
+          const result = await api.fn(code);
+          if (result && result.name) {
+            result.source = api.name;
+            results[code] = result;
+            return;
+          }
+        } catch {}
+      }
+      results[code] = { error: '查询失败' };
+    }));
+  }
+
+  // Supplement with 天天基金 gsz (estimated NAV) for intraday display
+  // Don't overwrite gszzl — akshare already provides the official daily change
+  for (const [code, result] of Object.entries(results)) {
+    if (!result.error && !result.gsz) {
       try {
-        const result = await api.fn(code);
-        if (result && result.name) {
-          result.source = api.name;
-          results[code] = result;
-          return;
-        }
+        const tt = await tryTiantian(code);
+        if (tt?.gsz) result.gsz = tt.gsz;
       } catch {}
     }
-    results[code] = { error: '查询失败' };
-  }));
+  }
 
   res.json(results);
 });
@@ -206,10 +294,62 @@ async function fetchHoldings(code) {
   } catch { return { reportDate: '', holdings: [] }; }
 }
 
+async function fetchStockQuotesFromYahoo(secids) {
+  const results = {};
+  if (!secids.length) return results;
+
+  const symbolMap = {}; // yahooSymbol -> secid
+  const symbols = [];
+  for (const s of secids) {
+    const [market, code] = s.split('.');
+    let ySymbol;
+    if (market === '1') ySymbol = `${code}.SS`;   // Shanghai
+    else if (market === '0') ySymbol = `${code}.SZ`; // Shenzhen
+    else continue; // skip HK/other
+    symbolMap[ySymbol] = s;
+    symbols.push(ySymbol);
+  }
+  if (!symbols.length) return results;
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbols.join(',')}?interval=1d&range=1d`;
+    const resp = await fetchUrl(url, { Referer: 'https://finance.yahoo.com/' }, 8000);
+    const data = await resp.json();
+    const resultList = data?.chart?.result;
+    if (!resultList) return results;
+
+    for (const item of resultList) {
+      const meta = item.meta;
+      if (!meta) continue;
+      const ySymbol = meta.symbol;
+      const secid = symbolMap[ySymbol];
+      if (!secid) continue;
+
+      const price = meta.regularMarketPrice;
+      const prevClose = meta.previousClose || meta.chartPreviousClose || 0;
+      const changePct = prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
+      const changeAmt = prevClose > 0 ? price - prevClose : 0;
+      results[secid] = {
+        price: price || 0,
+        changePct: Math.round(changePct * 100) / 100,
+        changeAmt: Math.round(changeAmt * 100) / 100,
+      };
+    }
+  } catch {}
+  return results;
+}
+
 async function fetchStockQuotes(secids) {
   if (!secids.length) return {};
+
+  // 1) Try Yahoo Finance first
+  const yahooResults = await fetchStockQuotesFromYahoo(secids);
+  const missing = secids.filter(s => !yahooResults[s]);
+  if (!missing.length) return yahooResults;
+
+  // 2) Fallback to Tencent for stocks Yahoo didn't cover
   try {
-    const codes = secids.map(s => {
+    const codes = missing.map(s => {
       const [market, code] = s.split('.');
       if (market === '1') return `sh${code}`;
       if (market === '0') return `sz${code}`;
@@ -219,7 +359,7 @@ async function fetchStockQuotes(secids) {
     const url = `https://qt.gtimg.cn/q=${codes.join(',')}`;
     const resp = await fetchUrl(url, { Referer: 'https://gu.qq.com/' }, 5000);
     const raw = await resp.text();
-    const result = {};
+    const tencResult = {};
     const lines = raw.split(';').filter(l => l.includes('="'));
     for (const line of lines) {
       const eqIdx = line.indexOf('="');
@@ -232,22 +372,14 @@ async function fetchStockQuotes(secids) {
       const price = parseFloat(parts[3]) || 0;
       const changeAmt = parseFloat(parts[31]) || 0;
       const changePct = parseFloat(parts[32]) || 0;
-      if (code) {
-        result[code] = { price, changePct, changeAmt };
-      }
+      if (code) tencResult[code] = { price, changePct, changeAmt };
     }
-    const secidMap = {};
-    for (const s of secids) {
+    for (const s of missing) {
       const [market, code] = s.split('.');
-      let prefix;
-      if (market === '1') prefix = `sh${code}`;
-      else if (market === '0') prefix = `sz${code}`;
-      else if (market === '116') prefix = `r_hk${code}`;
-      else prefix = `sz${code}`;
-      if (result[code]) secidMap[s] = result[code];
+      if (tencResult[code]) yahooResults[s] = tencResult[code];
     }
-    return secidMap;
-  } catch { return {}; }
+  } catch {}
+  return yahooResults;
 }
 
 router.get('/stock-quotes', async (req, res) => {
@@ -352,16 +484,33 @@ async function fetchIndustries(secids) {
   const results = {};
   await Promise.all(secids.map(async (secid) => {
     try {
-      const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f57,f58,f127`;
-      const resp = await fetchUrl(url, { Referer: 'https://quote.eastmoney.com/' }, 5000);
+      // secid format: "0.000001" (SZ) or "1.688012" (SH)
+      const parts = secid.split('.');
+      const market = parts[0] === '1' ? 'SH' : 'SZ';
+      const code = parts[1] || '';
+      const stockCode = market + code;
+      const url = `https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/PageAjax?code=${stockCode}`;
+      const resp = await fetchUrl(url, { Referer: 'https://emweb.securities.eastmoney.com/' }, 8000);
       const data = await resp.json();
-      if (data?.data?.f127) {
-        const level2 = data.data.f127;
+      const jbzl = data?.jbzl?.[0];
+      if (jbzl) {
+        let level1 = '其他';
+        // EM2016 format: "金融-银行-股份制与城商行" → Level1 = "金融"
+        const em2016 = jbzl.EM2016 || '';
+        if (em2016) {
+          level1 = em2016.split('-')[0].trim();
+        } else {
+          // Fallback: INDUSTRYCSRC1 format: "金融业-货币金融服务" → Level1 = "金融"
+          const csrc = jbzl.INDUSTRYCSRC1 || '';
+          if (csrc) {
+            level1 = csrc.split('-')[0].replace(/业$/, '');
+          }
+        }
         results[secid] = {
-          code: data.data.f57 || '',
-          name: data.data.f58 || '',
-          level2,
-          level1: level2ToLevel1(level2),
+          code,
+          name: jbzl.SECURITY_NAME_ABBR || '',
+          level2: em2016,
+          level1,
         };
       } else {
         results[secid] = { level2: '', level1: '其他' };

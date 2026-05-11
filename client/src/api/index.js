@@ -40,6 +40,11 @@ export const settingsApi = {
   set: (key, value) => http.put(`/settings/${key}`, { value }).then(r => r.data),
 }
 
+export const paramsApi = {
+  get: (key) => http.get(`/params/${key}`).then(r => r.data),
+  set: (key, value) => http.put(`/params/${key}`, { value }).then(r => r.data),
+}
+
 export const proxyApi = {
   queryFund: (code) => http.get('/proxy', { params: { code } }).then(r => r.data),
   batchQuery: (codes) => http.post('/proxy/batch', { codes }).then(r => r.data),
@@ -54,6 +59,10 @@ export const aiApi = {
   ocr: (formData) => http.post('/ai/ocr', formData).then(r => r.data),
   history: (limit) => http.get('/ai/history', { params: { limit } }).then(r => r.data),
   clearHistory: () => http.delete('/ai/history').then(r => r.data),
+}
+
+export const fundDailyApi = {
+  latest: () => http.get('/fund-daily/latest').then(r => r.data),
 }
 
 export const dataApi = {

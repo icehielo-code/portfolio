@@ -32,7 +32,11 @@ const isDark = computed(() => echartsTheme.value === 'dark')
 
 watch(() => props.active, (val) => {
   if (val && chartRef.value) {
-    nextTick(() => chartRef.value.resize())
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        chartRef.value?.resize()
+      })
+    })
   }
 })
 
@@ -42,9 +46,9 @@ const chartOption = computed(() => {
 
   const chartData = data.map(d => ({
     name: d.name,
-    value: d.pct,
+    value: d.pct || 0,
     itemStyle: { color: d.color },
-    change: d.change,
+    change: d.change || 0,
   }))
 
   const fundMap = props.industryFundMap
